@@ -1,0 +1,1541 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Green Star Buildings v1.1 - Verification and Handover Submission Form</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background-color: #f5f5f5;
+            color: #333;
+            line-height: 1.5;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        header {
+            background-color: #2E7D32;
+            color: white;
+            padding: 20px;
+            text-align: center;
+            margin-bottom: 20px;
+            border-radius: 8px;
+        }
+
+        header h1 {
+            font-size: 1.5rem;
+            margin-bottom: 8px;
+        }
+
+        header p {
+            font-style: italic;
+            opacity: 0.9;
+        }
+
+        .tabs {
+            display: flex;
+            gap: 4px;
+            margin-bottom: 0;
+        }
+
+        .tab {
+            padding: 12px 24px;
+            background-color: #ddd;
+            border: none;
+            border-radius: 8px 8px 0 0;
+            cursor: pointer;
+            font-size: 1rem;
+            font-weight: 500;
+            transition: background-color 0.2s;
+        }
+
+        .tab:hover {
+            background-color: #ccc;
+        }
+
+        .tab.active {
+            background-color: white;
+            color: #2E7D32;
+            font-weight: 600;
+        }
+
+        .tab-content {
+            display: none;
+            background-color: white;
+            padding: 20px;
+            border-radius: 0 8px 8px 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        /* Dashboard Styles */
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        @media (max-width: 900px) {
+            .dashboard-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .legend-box, .threshold-box {
+            padding: 15px;
+            background-color: #f9f9f9;
+            border-radius: 8px;
+            border: 1px solid #e0e0e0;
+        }
+
+        .legend-box h3, .threshold-box h3 {
+            margin-bottom: 10px;
+            font-size: 0.9rem;
+            color: #666;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 6px 10px;
+            margin: 4px 0;
+            border-radius: 4px;
+        }
+
+        .legend-item.complies { background-color: #C8E6C9; }
+        .legend-item.minor { background-color: #FFF3CD; }
+        .legend-item.major { background-color: #F8D7DA; }
+        .legend-item.na { background-color: #E2E3E5; }
+
+        .summary-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+        }
+
+        .summary-table th,
+        .summary-table td {
+            padding: 12px;
+            text-align: center;
+            border: 1px solid #ddd;
+        }
+
+        .summary-table th {
+            background-color: #2E7D32;
+            color: white;
+            font-weight: 500;
+        }
+
+        .summary-table td:first-child {
+            text-align: left;
+            font-weight: 500;
+        }
+
+        .status-cell {
+            font-weight: 600;
+            border-radius: 4px;
+        }
+
+        .status-on-track { background-color: #C8E6C9; color: #1B5E20; }
+        .status-at-risk { background-color: #FFF3CD; color: #856404; }
+        .status-not-compliant { background-color: #F8D7DA; color: #721C24; }
+
+        .overall-summary {
+            background-color: #E8F5E9;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+        }
+
+        .overall-summary h3 {
+            margin-bottom: 15px;
+            color: #2E7D32;
+        }
+
+        .overall-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px;
+            background-color: white;
+            margin: 8px 0;
+            border-radius: 4px;
+            border: 1px solid #ddd;
+        }
+
+        .overall-item span:last-child {
+            font-weight: 600;
+            padding: 4px 12px;
+            border-radius: 4px;
+        }
+
+        .notes-section {
+            background-color: #f9f9f9;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 20px;
+        }
+
+        .notes-section h4 {
+            margin-bottom: 10px;
+            color: #666;
+        }
+
+        .notes-section ul {
+            padding-left: 20px;
+        }
+
+        .notes-section li {
+            margin: 6px 0;
+            color: #555;
+            font-size: 0.9rem;
+        }
+
+        /* Assessment Form Styles */
+        .section-header {
+            background-color: #C8E6C9;
+            padding: 12px 16px;
+            font-weight: 600;
+            font-size: 1.1rem;
+            margin-top: 20px;
+            border-radius: 4px;
+        }
+
+        .section-header:first-of-type {
+            margin-top: 0;
+        }
+
+        .assessment-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 20px;
+        }
+
+        .assessment-table th {
+            background-color: #2E7D32;
+            color: white;
+            padding: 12px 8px;
+            text-align: left;
+            font-weight: 500;
+            font-size: 0.85rem;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+
+        .assessment-table td {
+            padding: 10px 8px;
+            border: 1px solid #e0e0e0;
+            vertical-align: top;
+            font-size: 0.9rem;
+        }
+
+        .assessment-table tr:nth-child(even) {
+            background-color: #fafafa;
+        }
+
+        .assessment-table tr.subsection-start {
+            background-color: #E8F5E9;
+        }
+
+        .assessment-table tr.subsection-start td:first-child {
+            font-weight: 600;
+        }
+
+        .col-criteria { width: 14%; }
+        .col-requirement { width: 14%; }
+        .col-question { width: 28%; }
+        .col-status { width: 10%; }
+        .col-score { width: 6%; text-align: center; }
+        .col-evidence { width: 14%; }
+        .col-documentation { width: 14%; }
+
+        .status-select {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-size: 0.85rem;
+            cursor: pointer;
+        }
+
+        .status-select.complies { background-color: #C8E6C9; }
+        .status-select.minor { background-color: #FFF3CD; }
+        .status-select.major { background-color: #F8D7DA; }
+        .status-select.na { background-color: #E2E3E5; }
+
+        .score-display {
+            text-align: center;
+            font-weight: 600;
+            padding: 8px;
+            border-radius: 4px;
+        }
+
+        .evidence-input {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-size: 0.85rem;
+            resize: vertical;
+            min-height: 60px;
+        }
+
+        .documentation-text {
+            font-size: 0.85rem;
+            color: #555;
+        }
+
+        /* Print styles */
+        @media print {
+            .tabs { display: none; }
+            .tab-content { display: block !important; }
+            .container { max-width: 100%; }
+        }
+
+        /* Export button */
+        .export-btn {
+            background-color: #2E7D32;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            margin-right: 10px;
+        }
+
+        .export-btn:hover {
+            background-color: #1B5E20;
+        }
+
+        .actions-bar {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>GREEN STAR BUILDINGS v1.1 - VERIFICATION AND HANDOVER</h1>
+            <p>Outcome: The building has been optimised and handed over to deliver a higher level of performance in operation.</p>
+        </header>
+
+        <div class="tabs">
+            <button class="tab active" onclick="switchTab('dashboard')">Dashboard</button>
+            <button class="tab" onclick="switchTab('assessment')">Assessment</button>
+        </div>
+
+        <!-- Dashboard Tab -->
+        <div id="dashboard" class="tab-content active">
+            <div class="actions-bar">
+                <button class="export-btn" onclick="exportToCSV()">Export to CSV</button>
+                <button class="export-btn" onclick="window.print()">Print</button>
+            </div>
+
+            <div class="dashboard-grid">
+                <div class="legend-box">
+                    <h3>SCORING LEGEND</h3>
+                    <div class="legend-item complies">Complies = 0 points</div>
+                    <div class="legend-item minor">Minor NC = 1 point</div>
+                    <div class="legend-item major">Major NC = 3 points</div>
+                    <div class="legend-item na">N/A = Not counted</div>
+                </div>
+                <div class="threshold-box">
+                    <h3>THRESHOLDS</h3>
+                    <p><strong>3+ Minor NCs in a section = equivalent to 1 Major NC</strong></p>
+                    <br>
+                    <p><strong>Section Status:</strong></p>
+                    <ul style="margin-left: 20px; margin-top: 8px;">
+                        <li><strong>ON TRACK</strong> - Score 0-2, no Major NCs</li>
+                        <li><strong>AT RISK</strong> - Score 3-5, no Major NCs</li>
+                        <li><strong>NOT COMPLIANT</strong> - Score 6+, or any Major NC</li>
+                    </ul>
+                </div>
+            </div>
+
+            <table class="summary-table">
+                <thead>
+                    <tr>
+                        <th>Criteria Section</th>
+                        <th>Complies</th>
+                        <th>Minor NC</th>
+                        <th>Major NC</th>
+                        <th>Total Score</th>
+                        <th>Section Status</th>
+                    </tr>
+                </thead>
+                <tbody id="summary-body">
+                    <tr>
+                        <td>Metering and Monitoring</td>
+                        <td id="mm-complies">0</td>
+                        <td id="mm-minor">0</td>
+                        <td id="mm-major">0</td>
+                        <td id="mm-score">0</td>
+                        <td id="mm-status" class="status-cell">-</td>
+                    </tr>
+                    <tr>
+                        <td>Commissioning and Tuning</td>
+                        <td id="ct-complies">0</td>
+                        <td id="ct-minor">0</td>
+                        <td id="ct-major">0</td>
+                        <td id="ct-score">0</td>
+                        <td id="ct-status" class="status-cell">-</td>
+                    </tr>
+                    <tr>
+                        <td>Building Information</td>
+                        <td id="bi-complies">0</td>
+                        <td id="bi-minor">0</td>
+                        <td id="bi-major">0</td>
+                        <td id="bi-score">0</td>
+                        <td id="bi-status" class="status-cell">-</td>
+                    </tr>
+                    <tr>
+                        <td>Soft Landings Approach</td>
+                        <td id="sl-complies">0</td>
+                        <td id="sl-minor">0</td>
+                        <td id="sl-major">0</td>
+                        <td id="sl-score">0</td>
+                        <td id="sl-status" class="status-cell">-</td>
+                    </tr>
+                    <tr>
+                        <td>Independent Commissioning Agent</td>
+                        <td id="ica-complies">0</td>
+                        <td id="ica-minor">0</td>
+                        <td id="ica-major">0</td>
+                        <td id="ica-score">0</td>
+                        <td id="ica-status" class="status-cell">-</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div class="overall-summary">
+                <h3>OVERALL COMPLIANCE SUMMARY</h3>
+                <div class="overall-item">
+                    <span>Minimum Expectation Status:</span>
+                    <span id="min-exp-status">-</span>
+                </div>
+                <div class="overall-item">
+                    <span>Credit Achievement - Soft Landings:</span>
+                    <span id="sl-overall-status">-</span>
+                </div>
+                <div class="overall-item">
+                    <span>Credit Achievement - ICA:</span>
+                    <span id="ica-overall-status">-</span>
+                </div>
+            </div>
+
+            <div class="notes-section">
+                <h4>NOTES</h4>
+                <ul>
+                    <li>For Minimum Expectation: All three criteria (M&M, C&T, BI) must be ON TRACK or AT RISK (no Major NCs).</li>
+                    <li>For Credit Achievement: Either Soft Landings OR ICA must be ON TRACK (plus Minimum Expectation).</li>
+                    <li>For projects >$20m Total Building Services Value: BOTH Soft Landings AND ICA required.</li>
+                    <li>AT RISK status indicates minor issues that should be addressed before final submission.</li>
+                    <li>Any Major NC in a section results in NOT COMPLIANT status for that section.</li>
+                    <li>3 or more Minor NCs (score of 3+) without a Major NC results in AT RISK status.</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- Assessment Tab -->
+        <div id="assessment" class="tab-content">
+            <div class="actions-bar">
+                <button class="export-btn" onclick="saveProgress()">Save Progress</button>
+                <button class="export-btn" onclick="loadProgress()">Load Progress</button>
+                <button class="export-btn" onclick="clearAll()">Clear All</button>
+            </div>
+
+            <!-- MINIMUM EXPECTATION -->
+            <div class="section-header">MINIMUM EXPECTATION</div>
+
+            <!-- Metering and Monitoring -->
+            <table class="assessment-table">
+                <thead>
+                    <tr>
+                        <th class="col-criteria">Criteria</th>
+                        <th class="col-requirement">Requirement</th>
+                        <th class="col-question">Submission Question</th>
+                        <th class="col-status">Status</th>
+                        <th class="col-score">Score</th>
+                        <th class="col-evidence">Evidence Provided</th>
+                        <th class="col-documentation">Documentation Required</th>
+                    </tr>
+                </thead>
+                <tbody id="mm-section">
+                    <tr class="subsection-start">
+                        <td>Metering and Monitoring</td>
+                        <td>Metering Distribution</td>
+                        <td>Does the building have accessible energy and water metering for all distinct uses and major uses?</td>
+                        <td><select class="status-select" data-section="mm" onchange="updateStatus(this)">
+                            <option value="">Select...</option>
+                            <option value="Complies">Complies</option>
+                            <option value="Minor NC">Minor NC</option>
+                            <option value="Major NC">Major NC</option>
+                            <option value="N/A">N/A</option>
+                        </select></td>
+                        <td class="score-display">-</td>
+                        <td><textarea class="evidence-input" placeholder="Enter evidence..."></textarea></td>
+                        <td class="documentation-text">As-built drawings showing location of all energy and water meters</td>
+                    </tr>
+                    <tr>
+                        <td></td>
+                        <td></td>
+                        <td>Is metering provided for each separate tenancy or unit?</td>
+                        <td><select class="status-select" data-section="mm" onchange="updateStatus(this)">
+                            <option value="">Select...</option>
+                            <option value="Complies">Complies</option>
+                            <option value="Minor NC">Minor NC</option>
+                            <option value="Major NC">Major NC</option>
+                            <option value="N/A">N/A</option>
+                        </select></td>
+                        <td class="score-display">-</td>
+                        <td><textarea class="evidence-input" placeholder="Enter evidence..."></textarea></td>
+                        <td class="documentation-text"></td>
+                    </tr>
+                    <tr>
+                        <td></td>
+                        <td></td>
+                        <td>Is floor by floor metering provided where entire floors have a single use?</td>
+                        <td><select class="status-select" data-section="mm" onchange="updateStatus(this)">
+                            <option value="">Select...</option>
+                            <option value="Complies">Complies</option>
+                            <option value="Minor NC">Minor NC</option>
+                            <option value="Major NC">Major NC</option>
+                            <option value="N/A">N/A</option>
+                        </select></td>
+                        <td class="score-display">-</td>
+                        <td><textarea class="evidence-input" placeholder="Enter evidence..."></textarea></td>
+                        <td class="documentation-text"></td>
+                    </tr>
+                    <tr>
+                        <td></td>
+                        <td>Metering Schedule</td>
+                        <td>Has a metering schedule been provided in accordance with CIBSE TM39?</td>
+                        <td><select class="status-select" data-section="mm" onchange="updateStatus(this)">
+                            <option value="">Select...</option>
+                            <option value="Complies">Complies</option>
+                            <option value="Minor NC">Minor NC</option>
+                            <option value="Major NC">Major NC</option>
+                            <option value="N/A">N/A</option>
+                        </select></td>
+                        <td class="score-display">-</td>
+                        <td><textarea class="evidence-input" placeholder="Enter evidence..."></textarea></td>
+                        <td class="documentation-text">Metering schedule</td>
+                    </tr>
+                    <tr>
+                        <td></td>
+                        <td>Metering Attributes</td>
+                        <td>Do all meters provide continual information (up to 1-hour interval readings)?</td>
+                        <td><select class="status-select" data-section="mm" onchange="updateStatus(this)">
+                            <option value="">Select...</option>
+                            <option value="Complies">Complies</option>
+                            <option value="Minor NC">Minor NC</option>
+                            <option value="Major NC">Major NC</option>
+                            <option value="N/A">N/A</option>
+                        </select></td>
+                        <td class="score-display">-</td>
+                        <td><textarea class="evidence-input" placeholder="Enter evidence..."></textarea></td>
+                        <td class="documentation-text">Product data sheets demonstrating pattern approval by NMI or recognised standard</td>
+                    </tr>
+                    <tr>
+                        <td></td>
+                        <td></td>
+                        <td>Are meters commissioned and validated per NABERS Metering and Consumption Rules?</td>
+                        <td><select class="status-select" data-section="mm" onchange="updateStatus(this)">
+                            <option value="">Select...</option>
+                            <option value="Complies">Complies</option>
+                            <option value="Minor NC">Minor NC</option>
+                            <option value="Major NC">Major NC</option>
+                            <option value="N/A">N/A</option>
+                        </select></td>
+                        <td class="score-display">-</td>
+                        <td><textarea class="evidence-input" placeholder="Enter evidence..."></textarea></td>
+                        <td class="documentation-text">Completed metering validation documents</td>
+                    </tr>
+                    <tr>
+                        <td></td>
+                        <td></td>
+                        <td>Are meters pattern approved by NMI or recognised standard?</td>
+                        <td><select class="status-select" data-section="mm" onchange="updateStatus(this)">
+                            <option value="">Select...</option>
+                            <option value="Complies">Complies</option>
+                            <option value="Minor NC">Minor NC</option>
+                            <option value="Major NC">Major NC</option>
+                            <option value="N/A">N/A</option>
+                        </select></td>
+                        <td class="score-display">-</td>
+                        <td><textarea class="evidence-input" placeholder="Enter evidence..."></textarea></td>
+                        <td class="documentation-text">Product data sheets or certificates</td>
+                    </tr>
+                    <tr>
+                        <td></td>
+                        <td>Automatic Monitoring</td>
+                        <td>Is an automatic monitoring system implemented that reports consumption trends?</td>
+                        <td><select class="status-select" data-section="mm" onchange="updateStatus(this)">
+                            <option value="">Select...</option>
+                            <option value="Complies">Complies</option>
+                            <option value="Minor NC">Minor NC</option>
+                            <option value="Major NC">Major NC</option>
+                            <option value="N/A">N/A</option>
+                        </select></td>
+                        <td class="score-display">-</td>
+                        <td><textarea class="evidence-input" placeholder="Enter evidence..."></textarea></td>
+                        <td class="documentation-text">Letter of confirmation from contractor/metering provider</td>
+                    </tr>
+                    <tr>
+                        <td></td>
+                        <td></td>
+                        <td>Does the system raise alarms when energy/water use exceeds parameters?</td>
+                        <td><select class="status-select" data-section="mm" onchange="updateStatus(this)">
+                            <option value="">Select...</option>
+                            <option value="Complies">Complies</option>
+                            <option value="Minor NC">Minor NC</option>
+                            <option value="Major NC">Major NC</option>
+                            <option value="N/A">N/A</option>
+                        </select></td>
+                        <td class="score-display">-</td>
+                        <td><textarea class="evidence-input" placeholder="Enter evidence..."></textarea></td>
+                        <td class="documentation-text">Extracts from commissioning reports</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <!-- Commissioning and Tuning -->
+            <table class="assessment-table">
+                <tbody id="ct-section">
+                    <tr class="subsection-start">
+                        <td class="col-criteria">Commissioning and Tuning</td>
+                        <td class="col-requirement">Environmental Performance Targets</td>
+                        <td class="col-question">Were environmental performance targets documented prior to schematic design?</td>
+                        <td class="col-status"><select class="status-select" data-section="ct" onchange="updateStatus(this)">
+                            <option value="">Select...</option>
+                            <option value="Complies">Complies</option>
+                            <option value="Minor NC">Minor NC</option>
+                            <option value="Major NC">Major NC</option>
+                            <option value="N/A">N/A</option>
+                        </select></td>
+                        <td class="col-score score-display">-</td>
+                        <td class="col-evidence"><textarea class="evidence-input" placeholder="Enter evidence..."></textarea></td>
+                        <td class="col-documentation documentation-text">Extracts from design intent report or OPR</td>
+                    </tr>
+                    <tr>
+                        <td></td>
+                        <td></td>
+                        <td>Does the report include targets for energy use, water consumption, IEQ and airtightness?</td>
+                        <td><select class="status-select" data-section="ct" onchange="updateStatus(this)">
+                            <option value="">Select...</option>
+                            <option value="Complies">Complies</option>
+                            <option value="Minor NC">Minor NC</option>
+                            <option value="Major NC">Major NC</option>
+                            <option value="N/A">N/A</option>
+                        </select></td>
+                        <td class="score-display">-</td>
+                        <td><textarea class="evidence-input" placeholder="Enter evidence..."></textarea></td>
+                        <td class="documentation-text"></td>
+                    </tr>
+                    <tr>
+                        <td></td>
+                        <td></td>
+                        <td>Has the building owner signed off on the report/document?</td>
+                        <td><select class="status-select" data-section="ct" onchange="updateStatus(this)">
+                            <option value="">Select...</option>
+                            <option value="Complies">Complies</option>
+                            <option value="Minor NC">Minor NC</option>
+                            <option value="Major NC">Major NC</option>
+                            <option value="N/A">N/A</option>
+                        </select></td>
+                        <td class="score-display">-</td>
+                        <td><textarea class="evidence-input" placeholder="Enter evidence..."></textarea></td>
+                        <td class="documentation-text">Signed design intent report or OPR</td>
+                    </tr>
+                    <tr>
+                        <td></td>
+                        <td>Services and Maintainability Review</td>
+                        <td>Was a services and maintainability review conducted prior to construction?</td>
+                        <td><select class="status-select" data-section="ct" onchange="updateStatus(this)">
+                            <option value="">Select...</option>
+                            <option value="Complies">Complies</option>
+                            <option value="Minor NC">Minor NC</option>
+                            <option value="Major NC">Major NC</option>
+                            <option value="N/A">N/A</option>
+                        </select></td>
+                        <td class="score-display">-</td>
+                        <td><textarea class="evidence-input" placeholder="Enter evidence..."></textarea></td>
+                        <td class="documentation-text">Evidence of review being conducted</td>
+                    </tr>
+                    <tr>
+                        <td></td>
+                        <td></td>
+                        <td>Did the review involve building owner, design consultants, architect, FM, head contractor and ICA?</td>
+                        <td><select class="status-select" data-section="ct" onchange="updateStatus(this)">
+                            <option value="">Select...</option>
+                            <option value="Complies">Complies</option>
+                            <option value="Minor NC">Minor NC</option>
+                            <option value="Major NC">Major NC</option>
+                            <option value="N/A">N/A</option>
+                        </select></td>
+                        <td class="score-display">-</td>
+                        <td><textarea class="evidence-input" placeholder="Enter evidence..."></textarea></td>
+                        <td class="documentation-text"></td>
+                    </tr>
+                    <tr>
+                        <td></td>
+                        <td></td>
+                        <td>Were all items addressed, closed-out and documented in Services and Maintainability Report?</td>
+                        <td><select class="status-select" data-section="ct" onchange="updateStatus(this)">
+                            <option value="">Select...</option>
+                            <option value="Complies">Complies</option>
+                            <option value="Minor NC">Minor NC</option>
+                            <option value="Major NC">Major NC</option>
+                            <option value="N/A">N/A</option>
+                        </select></td>
+                        <td class="score-display">-</td>
+                        <td><textarea class="evidence-input" placeholder="Enter evidence..."></textarea></td>
+                        <td class="documentation-text">Services and Maintainability Report signed by all parties</td>
+                    </tr>
+                    <tr>
+                        <td></td>
+                        <td>Building Commissioning</td>
+                        <td>Were commissioning requirements included in construction documentation prior to construction?</td>
+                        <td><select class="status-select" data-section="ct" onchange="updateStatus(this)">
+                            <option value="">Select...</option>
+                            <option value="Complies">Complies</option>
+                            <option value="Minor NC">Minor NC</option>
+                            <option value="Major NC">Major NC</option>
+                            <option value="N/A">N/A</option>
+                        </select></td>
+                        <td class="score-display">-</td>
+                        <td><textarea class="evidence-input" placeholder="Enter evidence..."></textarea></td>
+                        <td class="documentation-text">Extracts from construction documentation</td>
+                    </tr>
+                    <tr>
+                        <td></td>
+                        <td></td>
+                        <td>Was a commissioning plan developed prior to start of commissioning?</td>
+                        <td><select class="status-select" data-section="ct" onchange="updateStatus(this)">
+                            <option value="">Select...</option>
+                            <option value="Complies">Complies</option>
+                            <option value="Minor NC">Minor NC</option>
+                            <option value="Major NC">Major NC</option>
+                            <option value="N/A">N/A</option>
+                        </select></td>
+                        <td class="score-display">-</td>
+                        <td><textarea class="evidence-input" placeholder="Enter evidence..."></textarea></td>
+                        <td class="documentation-text">Extracts of commissioning plan</td>
+                    </tr>
+                    <tr>
+                        <td></td>
+                        <td></td>
+                        <td>Was commissioning completed per a recognised standard (AIRAH DA27, ASHRAE, CIBSE, SA TA 5342)?</td>
+                        <td><select class="status-select" data-section="ct" onchange="updateStatus(this)">
+                            <option value="">Select...</option>
+                            <option value="Complies">Complies</option>
+                            <option value="Minor NC">Minor NC</option>
+                            <option value="Major NC">Major NC</option>
+                            <option value="N/A">N/A</option>
+                        </select></td>
+                        <td class="score-display">-</td>
+                        <td><textarea class="evidence-input" placeholder="Enter evidence..."></textarea></td>
+                        <td class="documentation-text">Extracts from commissioning report</td>
+                    </tr>
+                    <tr>
+                        <td></td>
+                        <td>Airtightness</td>
+                        <td>Were airtightness targets set prior to schematic design based on ATTMA Australia Guide?</td>
+                        <td><select class="status-select" data-section="ct" onchange="updateStatus(this)">
+                            <option value="">Select...</option>
+                            <option value="Complies">Complies</option>
+                            <option value="Minor NC">Minor NC</option>
+                            <option value="Major NC">Major NC</option>
+                            <option value="N/A">N/A</option>
+                        </select></td>
+                        <td class="score-display">-</td>
+                        <td><textarea class="evidence-input" placeholder="Enter evidence..."></textarea></td>
+                        <td class="documentation-text">Evidence of how airtightness targets were determined</td>
+                    </tr>
+                    <tr>
+                        <td></td>
+                        <td></td>
+                        <td>Was the air barrier system schematic reviewed prior to end of design development?</td>
+                        <td><select class="status-select" data-section="ct" onchange="updateStatus(this)">
+                            <option value="">Select...</option>
+                            <option value="Complies">Complies</option>
+                            <option value="Minor NC">Minor NC</option>
+                            <option value="Major NC">Major NC</option>
+                            <option value="N/A">N/A</option>
+                        </select></td>
+                        <td class="score-display">-</td>
+                        <td><textarea class="evidence-input" placeholder="Enter evidence..."></textarea></td>
+                        <td class="documentation-text">Evidence of air barrier system schematic review (marked up drawings)</td>
+                    </tr>
+                    <tr>
+                        <td></td>
+                        <td></td>
+                        <td>Was an approach to delivering airtightness developed prior to construction?</td>
+                        <td><select class="status-select" data-section="ct" onchange="updateStatus(this)">
+                            <option value="">Select...</option>
+                            <option value="Complies">Complies</option>
+                            <option value="Minor NC">Minor NC</option>
+                            <option value="Major NC">Major NC</option>
+                            <option value="N/A">N/A</option>
+                        </select></td>
+                        <td class="score-display">-</td>
+                        <td><textarea class="evidence-input" placeholder="Enter evidence..."></textarea></td>
+                        <td class="documentation-text">Airtightness testing and commissioning plan</td>
+                    </tr>
+                    <tr>
+                        <td></td>
+                        <td></td>
+                        <td>Was airtightness testing carried out per AS/NZS ISO 9972 Method 1 by ATTMA member?</td>
+                        <td><select class="status-select" data-section="ct" onchange="updateStatus(this)">
+                            <option value="">Select...</option>
+                            <option value="Complies">Complies</option>
+                            <option value="Minor NC">Minor NC</option>
+                            <option value="Major NC">Major NC</option>
+                            <option value="N/A">N/A</option>
+                        </select></td>
+                        <td class="score-display">-</td>
+                        <td><textarea class="evidence-input" placeholder="Enter evidence..."></textarea></td>
+                        <td class="documentation-text">Building airtightness testing report or ATTMA Green Star Commissioning report</td>
+                    </tr>
+                    <tr>
+                        <td></td>
+                        <td></td>
+                        <td>Were test results shared with building owner (regardless of targets being met)?</td>
+                        <td><select class="status-select" data-section="ct" onchange="updateStatus(this)">
+                            <option value="">Select...</option>
+                            <option value="Complies">Complies</option>
+                            <option value="Minor NC">Minor NC</option>
+                            <option value="Major NC">Major NC</option>
+                            <option value="N/A">N/A</option>
+                        </select></td>
+                        <td class="score-display">-</td>
+                        <td><textarea class="evidence-input" placeholder="Enter evidence..."></textarea></td>
+                        <td class="documentation-text">Signed confirmation from building owner</td>
+                    </tr>
+                    <tr>
+                        <td></td>
+                        <td></td>
+                        <td>Were airtightness test results included in energy modelling?</td>
+                        <td><select class="status-select" data-section="ct" onchange="updateStatus(this)">
+                            <option value="">Select...</option>
+                            <option value="Complies">Complies</option>
+                            <option value="Minor NC">Minor NC</option>
+                            <option value="Major NC">Major NC</option>
+                            <option value="N/A">N/A</option>
+                        </select></td>
+                        <td class="score-display">-</td>
+                        <td><textarea class="evidence-input" placeholder="Enter evidence..."></textarea></td>
+                        <td class="documentation-text">Extracts from energy modelling report</td>
+                    </tr>
+                    <tr>
+                        <td></td>
+                        <td>Building Systems Tuning</td>
+                        <td>Has building owner/developer committed to tuning process with quarterly adjustments for 12 months?</td>
+                        <td><select class="status-select" data-section="ct" onchange="updateStatus(this)">
+                            <option value="">Select...</option>
+                            <option value="Complies">Complies</option>
+                            <option value="Minor NC">Minor NC</option>
+                            <option value="Major NC">Major NC</option>
+                            <option value="N/A">N/A</option>
+                        </select></td>
+                        <td class="score-display">-</td>
+                        <td><textarea class="evidence-input" placeholder="Enter evidence..."></textarea></td>
+                        <td class="documentation-text">Commitment/contract from building owner and head contractor</td>
+                    </tr>
+                    <tr>
+                        <td></td>
+                        <td></td>
+                        <td>Does commitment include a building tuning manual/plan with roles and responsibilities?</td>
+                        <td><select class="status-select" data-section="ct" onchange="updateStatus(this)">
+                            <option value="">Select...</option>
+                            <option value="Complies">Complies</option>
+                            <option value="Minor NC">Minor NC</option>
+                            <option value="Major NC">Major NC</option>
+                            <option value="N/A">N/A</option>
+                        </select></td>
+                        <td class="score-display">-</td>
+                        <td><textarea class="evidence-input" placeholder="Enter evidence..."></textarea></td>
+                        <td class="documentation-text">Extracts of building tuning plan</td>
+                    </tr>
+                    <tr>
+                        <td></td>
+                        <td></td>
+                        <td>Does the building tuning team include FM, ICA/owner rep, head contractor and relevant subcontractors?</td>
+                        <td><select class="status-select" data-section="ct" onchange="updateStatus(this)">
+                            <option value="">Select...</option>
+                            <option value="Complies">Complies</option>
+                            <option value="Minor NC">Minor NC</option>
+                            <option value="Major NC">Major NC</option>
+                            <option value="N/A">N/A</option>
+                        </select></td>
+                        <td class="score-display">-</td>
+                        <td><textarea class="evidence-input" placeholder="Enter evidence..."></textarea></td>
+                        <td class="documentation-text"></td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <!-- Building Information -->
+            <table class="assessment-table">
+                <tbody id="bi-section">
+                    <tr class="subsection-start">
+                        <td class="col-criteria">Building Information</td>
+                        <td class="col-requirement">Operations and Maintenance Information</td>
+                        <td class="col-question">Has O&M information been provided to building owner for all nominated building systems?</td>
+                        <td class="col-status"><select class="status-select" data-section="bi" onchange="updateStatus(this)">
+                            <option value="">Select...</option>
+                            <option value="Complies">Complies</option>
+                            <option value="Minor NC">Minor NC</option>
+                            <option value="Major NC">Major NC</option>
+                            <option value="N/A">N/A</option>
+                        </select></td>
+                        <td class="col-score score-display">-</td>
+                        <td class="col-evidence"><textarea class="evidence-input" placeholder="Enter evidence..."></textarea></td>
+                        <td class="col-documentation documentation-text">Extracts of operations and maintenance information</td>
+                    </tr>
+                    <tr>
+                        <td></td>
+                        <td></td>
+                        <td>Does O&M info include maintenance instructions, procedures, schedules, service contacts, warranties and as-built drawings?</td>
+                        <td><select class="status-select" data-section="bi" onchange="updateStatus(this)">
+                            <option value="">Select...</option>
+                            <option value="Complies">Complies</option>
+                            <option value="Minor NC">Minor NC</option>
+                            <option value="Major NC">Major NC</option>
+                            <option value="N/A">N/A</option>
+                        </select></td>
+                        <td class="score-display">-</td>
+                        <td><textarea class="evidence-input" placeholder="Enter evidence..."></textarea></td>
+                        <td class="documentation-text"></td>
+                    </tr>
+                    <tr>
+                        <td></td>
+                        <td></td>
+                        <td>Do appropriate user groups have access to information for best practice environmental outcomes?</td>
+                        <td><select class="status-select" data-section="bi" onchange="updateStatus(this)">
+                            <option value="">Select...</option>
+                            <option value="Complies">Complies</option>
+                            <option value="Minor NC">Minor NC</option>
+                            <option value="Major NC">Major NC</option>
+                            <option value="N/A">N/A</option>
+                        </select></td>
+                        <td class="score-display">-</td>
+                        <td><textarea class="evidence-input" placeholder="Enter evidence..."></textarea></td>
+                        <td class="documentation-text"></td>
+                    </tr>
+                    <tr>
+                        <td></td>
+                        <td></td>
+                        <td>Does O&M info include guidance on keeping information up to date and validating alerts/faults?</td>
+                        <td><select class="status-select" data-section="bi" onchange="updateStatus(this)">
+                            <option value="">Select...</option>
+                            <option value="Complies">Complies</option>
+                            <option value="Minor NC">Minor NC</option>
+                            <option value="Major NC">Major NC</option>
+                            <option value="N/A">N/A</option>
+                        </select></td>
+                        <td class="score-display">-</td>
+                        <td><textarea class="evidence-input" placeholder="Enter evidence..."></textarea></td>
+                        <td class="documentation-text"></td>
+                    </tr>
+                    <tr>
+                        <td></td>
+                        <td>Building Logbook</td>
+                        <td>Has a building logbook been developed per CIBSE TM31 for all nominated building systems?</td>
+                        <td><select class="status-select" data-section="bi" onchange="updateStatus(this)">
+                            <option value="">Select...</option>
+                            <option value="Complies">Complies</option>
+                            <option value="Minor NC">Minor NC</option>
+                            <option value="Major NC">Major NC</option>
+                            <option value="N/A">N/A</option>
+                        </select></td>
+                        <td class="score-display">-</td>
+                        <td><textarea class="evidence-input" placeholder="Enter evidence..."></textarea></td>
+                        <td class="documentation-text">Building logbook</td>
+                    </tr>
+                    <tr>
+                        <td></td>
+                        <td></td>
+                        <td>Was the logbook presented to building owner prior to occupation?</td>
+                        <td><select class="status-select" data-section="bi" onchange="updateStatus(this)">
+                            <option value="">Select...</option>
+                            <option value="Complies">Complies</option>
+                            <option value="Minor NC">Minor NC</option>
+                            <option value="Major NC">Major NC</option>
+                            <option value="N/A">N/A</option>
+                        </select></td>
+                        <td class="score-display">-</td>
+                        <td><textarea class="evidence-input" placeholder="Enter evidence..."></textarea></td>
+                        <td class="documentation-text">Evidence of provision to building owner</td>
+                    </tr>
+                    <tr>
+                        <td></td>
+                        <td>Building User Information</td>
+                        <td>Has building user information been provided to building owner and FM prior to occupation?</td>
+                        <td><select class="status-select" data-section="bi" onchange="updateStatus(this)">
+                            <option value="">Select...</option>
+                            <option value="Complies">Complies</option>
+                            <option value="Minor NC">Minor NC</option>
+                            <option value="Major NC">Major NC</option>
+                            <option value="N/A">N/A</option>
+                        </select></td>
+                        <td class="score-display">-</td>
+                        <td><textarea class="evidence-input" placeholder="Enter evidence..."></textarea></td>
+                        <td class="documentation-text">Building user information</td>
+                    </tr>
+                    <tr>
+                        <td></td>
+                        <td></td>
+                        <td>Is the building user information publicly available to intended users?</td>
+                        <td><select class="status-select" data-section="bi" onchange="updateStatus(this)">
+                            <option value="">Select...</option>
+                            <option value="Complies">Complies</option>
+                            <option value="Minor NC">Minor NC</option>
+                            <option value="Major NC">Major NC</option>
+                            <option value="N/A">N/A</option>
+                        </select></td>
+                        <td class="score-display">-</td>
+                        <td><textarea class="evidence-input" placeholder="Enter evidence..."></textarea></td>
+                        <td class="documentation-text"></td>
+                    </tr>
+                    <tr>
+                        <td></td>
+                        <td></td>
+                        <td>Is the information communicated in a way easily understood by the target audience?</td>
+                        <td><select class="status-select" data-section="bi" onchange="updateStatus(this)">
+                            <option value="">Select...</option>
+                            <option value="Complies">Complies</option>
+                            <option value="Minor NC">Minor NC</option>
+                            <option value="Major NC">Major NC</option>
+                            <option value="N/A">N/A</option>
+                        </select></td>
+                        <td class="score-display">-</td>
+                        <td><textarea class="evidence-input" placeholder="Enter evidence..."></textarea></td>
+                        <td class="documentation-text"></td>
+                    </tr>
+                    <tr>
+                        <td></td>
+                        <td></td>
+                        <td>Is the information in an editable, digital format accessible for updates by FM?</td>
+                        <td><select class="status-select" data-section="bi" onchange="updateStatus(this)">
+                            <option value="">Select...</option>
+                            <option value="Complies">Complies</option>
+                            <option value="Minor NC">Minor NC</option>
+                            <option value="Major NC">Major NC</option>
+                            <option value="N/A">N/A</option>
+                        </select></td>
+                        <td class="score-display">-</td>
+                        <td><textarea class="evidence-input" placeholder="Enter evidence..."></textarea></td>
+                        <td class="documentation-text">Evidence of editable format provision</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <!-- CREDIT ACHIEVEMENT -->
+            <div class="section-header">CREDIT ACHIEVEMENT (1 point)</div>
+
+            <!-- Soft Landings Approach -->
+            <table class="assessment-table">
+                <tbody id="sl-section">
+                    <tr class="subsection-start">
+                        <td class="col-criteria">Soft Landings Approach</td>
+                        <td class="col-requirement">CIBSE ANZ Framework</td>
+                        <td class="col-question">Have Stages 1 to 4 of the CIBSE ANZ Soft Landings Framework been implemented?</td>
+                        <td class="col-status"><select class="status-select" data-section="sl" onchange="updateStatus(this)">
+                            <option value="">Select...</option>
+                            <option value="Complies">Complies</option>
+                            <option value="Minor NC">Minor NC</option>
+                            <option value="Major NC">Major NC</option>
+                            <option value="N/A">N/A</option>
+                        </select></td>
+                        <td class="col-score score-display">-</td>
+                        <td class="col-evidence"><textarea class="evidence-input" placeholder="Enter evidence..."></textarea></td>
+                        <td class="col-documentation documentation-text">Evidence of CIBSE ANZ framework implementation</td>
+                    </tr>
+                    <tr>
+                        <td></td>
+                        <td></td>
+                        <td>Are sample worksheets from CIBSE ANZ for Stages 1-3 completed?</td>
+                        <td><select class="status-select" data-section="sl" onchange="updateStatus(this)">
+                            <option value="">Select...</option>
+                            <option value="Complies">Complies</option>
+                            <option value="Minor NC">Minor NC</option>
+                            <option value="Major NC">Major NC</option>
+                            <option value="N/A">N/A</option>
+                        </select></td>
+                        <td class="score-display">-</td>
+                        <td><textarea class="evidence-input" placeholder="Enter evidence..."></textarea></td>
+                        <td class="documentation-text">Completed worksheets</td>
+                    </tr>
+                    <tr>
+                        <td></td>
+                        <td></td>
+                        <td>Are actions for Stage 4 identified?</td>
+                        <td><select class="status-select" data-section="sl" onchange="updateStatus(this)">
+                            <option value="">Select...</option>
+                            <option value="Complies">Complies</option>
+                            <option value="Minor NC">Minor NC</option>
+                            <option value="Major NC">Major NC</option>
+                            <option value="N/A">N/A</option>
+                        </select></td>
+                        <td class="score-display">-</td>
+                        <td><textarea class="evidence-input" placeholder="Enter evidence..."></textarea></td>
+                        <td class="documentation-text"></td>
+                    </tr>
+                    <tr>
+                        <td></td>
+                        <td>FM Team Involvement</td>
+                        <td>Was the FM team (or building owner rep) involved in commissioning and handover process?</td>
+                        <td><select class="status-select" data-section="sl" onchange="updateStatus(this)">
+                            <option value="">Select...</option>
+                            <option value="Complies">Complies</option>
+                            <option value="Minor NC">Minor NC</option>
+                            <option value="Major NC">Major NC</option>
+                            <option value="N/A">N/A</option>
+                        </select></td>
+                        <td class="score-display">-</td>
+                        <td><textarea class="evidence-input" placeholder="Enter evidence..."></textarea></td>
+                        <td class="documentation-text"></td>
+                    </tr>
+                    <tr>
+                        <td></td>
+                        <td></td>
+                        <td>Did FM team take part in developing brief technical guide and O&M manual?</td>
+                        <td><select class="status-select" data-section="sl" onchange="updateStatus(this)">
+                            <option value="">Select...</option>
+                            <option value="Complies">Complies</option>
+                            <option value="Minor NC">Minor NC</option>
+                            <option value="Major NC">Major NC</option>
+                            <option value="N/A">N/A</option>
+                        </select></td>
+                        <td class="score-display">-</td>
+                        <td><textarea class="evidence-input" placeholder="Enter evidence..."></textarea></td>
+                        <td class="documentation-text"></td>
+                    </tr>
+                    <tr>
+                        <td></td>
+                        <td></td>
+                        <td>Did FM team sign-off on the O&M manual?</td>
+                        <td><select class="status-select" data-section="sl" onchange="updateStatus(this)">
+                            <option value="">Select...</option>
+                            <option value="Complies">Complies</option>
+                            <option value="Minor NC">Minor NC</option>
+                            <option value="Major NC">Major NC</option>
+                            <option value="N/A">N/A</option>
+                        </select></td>
+                        <td class="score-display">-</td>
+                        <td><textarea class="evidence-input" placeholder="Enter evidence..."></textarea></td>
+                        <td class="documentation-text">Signed O&M manual</td>
+                    </tr>
+                    <tr>
+                        <td></td>
+                        <td></td>
+                        <td>Was FM team trained before handover (including BMS demonstration)?</td>
+                        <td><select class="status-select" data-section="sl" onchange="updateStatus(this)">
+                            <option value="">Select...</option>
+                            <option value="Complies">Complies</option>
+                            <option value="Minor NC">Minor NC</option>
+                            <option value="Major NC">Major NC</option>
+                            <option value="N/A">N/A</option>
+                        </select></td>
+                        <td class="score-display">-</td>
+                        <td><textarea class="evidence-input" placeholder="Enter evidence..."></textarea></td>
+                        <td class="documentation-text">Training records</td>
+                    </tr>
+                    <tr>
+                        <td></td>
+                        <td></td>
+                        <td>Does FM team have continued access to design/construction team for 2 years post PC?</td>
+                        <td><select class="status-select" data-section="sl" onchange="updateStatus(this)">
+                            <option value="">Select...</option>
+                            <option value="Complies">Complies</option>
+                            <option value="Minor NC">Minor NC</option>
+                            <option value="Major NC">Major NC</option>
+                            <option value="N/A">N/A</option>
+                        </select></td>
+                        <td class="score-display">-</td>
+                        <td><textarea class="evidence-input" placeholder="Enter evidence..."></textarea></td>
+                        <td class="documentation-text">Contractual evidence of continued access</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <!-- Independent Commissioning Agent -->
+            <table class="assessment-table">
+                <tbody id="ica-section">
+                    <tr class="subsection-start">
+                        <td class="col-criteria">Independent Commissioning Agent</td>
+                        <td class="col-requirement">ICA Appointment</td>
+                        <td class="col-question">Was an ICA appointed prior to design development?</td>
+                        <td class="col-status"><select class="status-select" data-section="ica" onchange="updateStatus(this)">
+                            <option value="">Select...</option>
+                            <option value="Complies">Complies</option>
+                            <option value="Minor NC">Minor NC</option>
+                            <option value="Major NC">Major NC</option>
+                            <option value="N/A">N/A</option>
+                        </select></td>
+                        <td class="col-score score-display">-</td>
+                        <td class="col-evidence"><textarea class="evidence-input" placeholder="Enter evidence..."></textarea></td>
+                        <td class="col-documentation documentation-text">Letter from building owner confirming ICA appointment</td>
+                    </tr>
+                    <tr>
+                        <td></td>
+                        <td>ICA Qualifications</td>
+                        <td>Is the ICA an advocate for and reporting directly to the project owner?</td>
+                        <td><select class="status-select" data-section="ica" onchange="updateStatus(this)">
+                            <option value="">Select...</option>
+                            <option value="Complies">Complies</option>
+                            <option value="Minor NC">Minor NC</option>
+                            <option value="Major NC">Major NC</option>
+                            <option value="N/A">N/A</option>
+                        </select></td>
+                        <td class="score-display">-</td>
+                        <td><textarea class="evidence-input" placeholder="Enter evidence..."></textarea></td>
+                        <td class="documentation-text">CV of ICA with qualifications and experience</td>
+                    </tr>
+                    <tr>
+                        <td></td>
+                        <td></td>
+                        <td>Is the ICA independent of any consultant/contractor involved in design or installation?</td>
+                        <td><select class="status-select" data-section="ica" onchange="updateStatus(this)">
+                            <option value="">Select...</option>
+                            <option value="Complies">Complies</option>
+                            <option value="Minor NC">Minor NC</option>
+                            <option value="Major NC">Major NC</option>
+                            <option value="N/A">N/A</option>
+                        </select></td>
+                        <td class="score-display">-</td>
+                        <td><textarea class="evidence-input" placeholder="Enter evidence..."></textarea></td>
+                        <td class="documentation-text"></td>
+                    </tr>
+                    <tr>
+                        <td></td>
+                        <td></td>
+                        <td>Is the ICA a registered professional engineer or qualified technician with demonstrated commissioning competency?</td>
+                        <td><select class="status-select" data-section="ica" onchange="updateStatus(this)">
+                            <option value="">Select...</option>
+                            <option value="Complies">Complies</option>
+                            <option value="Minor NC">Minor NC</option>
+                            <option value="Major NC">Major NC</option>
+                            <option value="N/A">N/A</option>
+                        </select></td>
+                        <td class="score-display">-</td>
+                        <td><textarea class="evidence-input" placeholder="Enter evidence..."></textarea></td>
+                        <td class="documentation-text"></td>
+                    </tr>
+                    <tr>
+                        <td></td>
+                        <td></td>
+                        <td>Does the ICA have experience commissioning at least 2 similar projects?</td>
+                        <td><select class="status-select" data-section="ica" onchange="updateStatus(this)">
+                            <option value="">Select...</option>
+                            <option value="Complies">Complies</option>
+                            <option value="Minor NC">Minor NC</option>
+                            <option value="Major NC">Major NC</option>
+                            <option value="N/A">N/A</option>
+                        </select></td>
+                        <td class="score-display">-</td>
+                        <td><textarea class="evidence-input" placeholder="Enter evidence..."></textarea></td>
+                        <td class="documentation-text"></td>
+                    </tr>
+                    <tr>
+                        <td></td>
+                        <td>ICA Involvement</td>
+                        <td>Did ICA advise, monitor and verify commissioning/tuning throughout design development, tender, construction, commissioning and tuning phases?</td>
+                        <td><select class="status-select" data-section="ica" onchange="updateStatus(this)">
+                            <option value="">Select...</option>
+                            <option value="Complies">Complies</option>
+                            <option value="Minor NC">Minor NC</option>
+                            <option value="Major NC">Major NC</option>
+                            <option value="N/A">N/A</option>
+                        </select></td>
+                        <td class="score-display">-</td>
+                        <td><textarea class="evidence-input" placeholder="Enter evidence..."></textarea></td>
+                        <td class="documentation-text">Evidence of ICA involvement from design stage through to tuning</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        // Tab switching
+        function switchTab(tabId) {
+            document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+
+            document.querySelector(`[onclick="switchTab('${tabId}')"]`).classList.add('active');
+            document.getElementById(tabId).classList.add('active');
+        }
+
+        // Update status when dropdown changes
+        function updateStatus(select) {
+            const value = select.value;
+            const row = select.closest('tr');
+            const scoreCell = row.querySelector('.score-display');
+
+            // Remove existing classes
+            select.classList.remove('complies', 'minor', 'major', 'na');
+
+            // Calculate score and apply styling
+            let score = '-';
+            if (value === 'Complies') {
+                select.classList.add('complies');
+                score = 0;
+            } else if (value === 'Minor NC') {
+                select.classList.add('minor');
+                score = 1;
+            } else if (value === 'Major NC') {
+                select.classList.add('major');
+                score = 3;
+            } else if (value === 'N/A') {
+                select.classList.add('na');
+                score = '-';
+            }
+
+            scoreCell.textContent = score;
+
+            // Update dashboard
+            updateDashboard();
+        }
+
+        // Update dashboard calculations
+        function updateDashboard() {
+            const sections = ['mm', 'ct', 'bi', 'sl', 'ica'];
+            const sectionStats = {};
+
+            sections.forEach(section => {
+                const selects = document.querySelectorAll(`#${section}-section .status-select`);
+                let complies = 0, minor = 0, major = 0, totalScore = 0;
+
+                selects.forEach(select => {
+                    const value = select.value;
+                    if (value === 'Complies') {
+                        complies++;
+                    } else if (value === 'Minor NC') {
+                        minor++;
+                        totalScore += 1;
+                    } else if (value === 'Major NC') {
+                        major++;
+                        totalScore += 3;
+                    }
+                });
+
+                // Update section stats in dashboard
+                document.getElementById(`${section}-complies`).textContent = complies;
+                document.getElementById(`${section}-minor`).textContent = minor;
+                document.getElementById(`${section}-major`).textContent = major;
+                document.getElementById(`${section}-score`).textContent = totalScore;
+
+                // Calculate status
+                let status, statusClass;
+                if (major > 0) {
+                    status = 'NOT COMPLIANT';
+                    statusClass = 'status-not-compliant';
+                } else if (totalScore >= 6) {
+                    status = 'NOT COMPLIANT';
+                    statusClass = 'status-not-compliant';
+                } else if (totalScore >= 3) {
+                    status = 'AT RISK';
+                    statusClass = 'status-at-risk';
+                } else {
+                    status = 'ON TRACK';
+                    statusClass = 'status-on-track';
+                }
+
+                const statusCell = document.getElementById(`${section}-status`);
+                statusCell.textContent = status;
+                statusCell.className = 'status-cell ' + statusClass;
+
+                sectionStats[section] = { status, statusClass };
+            });
+
+            // Update overall summary
+            updateOverallSummary(sectionStats);
+        }
+
+        function updateOverallSummary(stats) {
+            // Minimum Expectation (M&M, C&T, BI)
+            const minExpSections = ['mm', 'ct', 'bi'];
+            let minExpStatus, minExpClass;
+
+            if (minExpSections.some(s => stats[s].status === 'NOT COMPLIANT')) {
+                minExpStatus = 'NOT COMPLIANT';
+                minExpClass = 'status-not-compliant';
+            } else if (minExpSections.some(s => stats[s].status === 'AT RISK')) {
+                minExpStatus = 'AT RISK';
+                minExpClass = 'status-at-risk';
+            } else {
+                minExpStatus = 'ON TRACK';
+                minExpClass = 'status-on-track';
+            }
+
+            const minExpCell = document.getElementById('min-exp-status');
+            minExpCell.textContent = minExpStatus;
+            minExpCell.className = stats.mm ? minExpClass : '';
+
+            // Soft Landings
+            const slCell = document.getElementById('sl-overall-status');
+            slCell.textContent = stats.sl.status;
+            slCell.className = stats.sl.statusClass;
+
+            // ICA
+            const icaCell = document.getElementById('ica-overall-status');
+            icaCell.textContent = stats.ica.status;
+            icaCell.className = stats.ica.statusClass;
+        }
+
+        // Save progress to localStorage
+        function saveProgress() {
+            const data = {
+                timestamp: new Date().toISOString(),
+                sections: {}
+            };
+
+            ['mm', 'ct', 'bi', 'sl', 'ica'].forEach(section => {
+                data.sections[section] = [];
+                const rows = document.querySelectorAll(`#${section}-section tr`);
+                rows.forEach(row => {
+                    const select = row.querySelector('.status-select');
+                    const textarea = row.querySelector('.evidence-input');
+                    if (select && textarea) {
+                        data.sections[section].push({
+                            status: select.value,
+                            evidence: textarea.value
+                        });
+                    }
+                });
+            });
+
+            localStorage.setItem('greenstar-verification-handover', JSON.stringify(data));
+            alert('Progress saved successfully!');
+        }
+
+        // Load progress from localStorage
+        function loadProgress() {
+            const saved = localStorage.getItem('greenstar-verification-handover');
+            if (!saved) {
+                alert('No saved progress found.');
+                return;
+            }
+
+            const data = JSON.parse(saved);
+
+            ['mm', 'ct', 'bi', 'sl', 'ica'].forEach(section => {
+                if (data.sections[section]) {
+                    const rows = document.querySelectorAll(`#${section}-section tr`);
+                    data.sections[section].forEach((item, index) => {
+                        if (rows[index]) {
+                            const select = rows[index].querySelector('.status-select');
+                            const textarea = rows[index].querySelector('.evidence-input');
+                            if (select && item.status) {
+                                select.value = item.status;
+                                updateStatus(select);
+                            }
+                            if (textarea) {
+                                textarea.value = item.evidence || '';
+                            }
+                        }
+                    });
+                }
+            });
+
+            alert(`Progress loaded from ${new Date(data.timestamp).toLocaleString()}`);
+        }
+
+        // Clear all entries
+        function clearAll() {
+            if (!confirm('Are you sure you want to clear all entries? This cannot be undone.')) {
+                return;
+            }
+
+            document.querySelectorAll('.status-select').forEach(select => {
+                select.value = '';
+                select.classList.remove('complies', 'minor', 'major', 'na');
+            });
+
+            document.querySelectorAll('.score-display').forEach(cell => {
+                cell.textContent = '-';
+            });
+
+            document.querySelectorAll('.evidence-input').forEach(textarea => {
+                textarea.value = '';
+            });
+
+            updateDashboard();
+        }
+
+        // Export to CSV
+        function exportToCSV() {
+            let csv = 'Section,Criteria,Requirement,Question,Status,Score,Evidence,Documentation\n';
+
+            const sectionNames = {
+                'mm': 'Metering and Monitoring',
+                'ct': 'Commissioning and Tuning',
+                'bi': 'Building Information',
+                'sl': 'Soft Landings Approach',
+                'ica': 'Independent Commissioning Agent'
+            };
+
+            ['mm', 'ct', 'bi', 'sl', 'ica'].forEach(section => {
+                const rows = document.querySelectorAll(`#${section}-section tr`);
+                rows.forEach(row => {
+                    const cells = row.querySelectorAll('td');
+                    if (cells.length > 0) {
+                        const select = row.querySelector('.status-select');
+                        const textarea = row.querySelector('.evidence-input');
+                        const scoreDisplay = row.querySelector('.score-display');
+
+                        const rowData = [
+                            sectionNames[section],
+                            cells[0]?.textContent?.trim() || '',
+                            cells[1]?.textContent?.trim() || '',
+                            cells[2]?.textContent?.trim() || '',
+                            select?.value || '',
+                            scoreDisplay?.textContent || '',
+                            textarea?.value?.replace(/"/g, '""') || '',
+                            cells[6]?.textContent?.trim() || ''
+                        ];
+
+                        csv += rowData.map(cell => `"${cell}"`).join(',') + '\n';
+                    }
+                });
+            });
+
+            const blob = new Blob([csv], { type: 'text/csv' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'verification-handover-assessment.csv';
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+
+        // Initialize dashboard on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            updateDashboard();
+        });
+    </script>
+</body>
+</html>
