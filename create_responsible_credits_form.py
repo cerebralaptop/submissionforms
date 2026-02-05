@@ -1,6 +1,6 @@
 import openpyxl
 from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
-from openpyxl.utils import get_column_letter
+from openpyxl.worksheet.datavalidation import DataValidation
 
 wb = openpyxl.Workbook()
 
@@ -31,8 +31,17 @@ thin_border = Border(
     bottom=Side(style="thin"),
 )
 
-# Column widths: A=Ref, B=Credit, C=Performance Level, D=Criteria, E=Type, F=Question, G=Response, H=Data Collection Notes
-COL_WIDTHS = {"A": 8, "B": 20, "C": 22, "D": 28, "E": 16, "F": 65, "G": 60, "H": 45}
+COL_WIDTHS = {"A": 8, "B": 20, "C": 22, "D": 28, "E": 16, "F": 55, "G": 50, "H": 40}
+
+# Reusable Yes/No dropdown
+yn_dv = DataValidation(type="list", formula1='"Yes,No"', allow_blank=True)
+yn_dv.error = "Please select Yes or No"
+yn_dv.errorTitle = "Invalid entry"
+yn_dv.prompt = "Select Yes or No"
+yn_dv.promptTitle = "Yes / No"
+
+# Track which rows need the dropdown per sheet
+yn_cells = {}  # sheet title -> list of cell refs
 
 
 def setup_sheet(ws, title):
@@ -41,13 +50,8 @@ def setup_sheet(ws, title):
         ws.column_dimensions[col_letter].width = width
 
     headers = [
-        "Ref",
-        "Credit",
-        "Performance Level",
-        "Criteria",
-        "Question Type",
-        "Question",
-        "Response",
+        "Ref", "Credit", "Performance Level", "Criteria",
+        "Question Type", "Question", "Response",
         "Data Collection / Research Notes",
     ]
     for col, h in enumerate(headers, 1):
@@ -58,7 +62,8 @@ def setup_sheet(ws, title):
         cell.border = thin_border
     ws.row_dimensions[1].height = 35
     ws.freeze_panes = "A2"
-    return 2  # next row
+    yn_cells[title] = []
+    return 2
 
 
 def add_credit_header(ws, row, credit_name, outcome):
@@ -95,25 +100,40 @@ def add_criteria_header(ws, row, criteria_name):
 
 
 def add_question(ws, row, ref, credit, level, criteria, q_type, question, data_note=""):
+    is_yn = q_type == "Condition (Y/N)"
     values = [ref, credit, level, criteria, q_type, question, "", data_note]
     for col, val in enumerate(values, 1):
         cell = ws.cell(row=row, column=col, value=val)
         cell.alignment = wrap
         cell.border = thin_border
-        if q_type == "Condition (Y/N)":
+        if is_yn:
             cell.fill = condition_fill
-            if col == 5:
-                cell.font = condition_font
-            else:
-                cell.font = question_font
+            cell.font = condition_font if col == 5 else question_font
         elif col == 8 and data_note:
             cell.fill = data_fill
             cell.font = data_flag_font
         else:
             cell.fill = question_fill if col != 7 else white_fill
             cell.font = question_font
-    ws.row_dimensions[row].height = 60
+    ws.row_dimensions[row].height = 45
+    if is_yn:
+        yn_cells[ws.title].append(f"G{row}")
     return row + 1
+
+
+def apply_dropdowns(ws):
+    """Add a single Yes/No data validation to the sheet covering all Y/N cells."""
+    cells = yn_cells.get(ws.title, [])
+    if not cells:
+        return
+    dv = DataValidation(type="list", formula1='"Yes,No"', allow_blank=True)
+    dv.error = "Please select Yes or No"
+    dv.errorTitle = "Invalid entry"
+    dv.prompt = "Select Yes or No"
+    dv.promptTitle = "Yes / No"
+    for c in cells:
+        dv.add(c)
+    ws.add_data_validation(dv)
 
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -124,91 +144,92 @@ row = setup_sheet(ws, "Industry Development")
 row = add_credit_header(ws, row, "Industry Development",
     "The development facilitates industry transformation through partnership, collaboration and data sharing.")
 
-# --- Credit Achievement ---
 row = add_level_header(ws, row, "Credit Achievement (1 point)")
 
-# Criteria: Green Star Accredited Professional
+# ── Green Star Accredited Professional ──
 row = add_criteria_header(ws, row, "Green Star Accredited Professional")
 ref_base = "ID"
-q_num = 1
+q = 1
 
-row = add_question(ws, row, f"{ref_base}.{q_num}", "Industry Development", "Credit Achievement",
+row = add_question(ws, row, f"{ref_base}.{q}", "Industry Development", "Credit Achievement",
     "Green Star Accredited Professional", "Descriptive",
-    "Identify the Green Star Accredited Professional(s) (GSAP) engaged on the project, including their name, organisation, accreditation number, and the Green Star Buildings accreditation they hold.",
-    "Tracks GSAP workforce capacity and distribution across projects.")
-q_num += 1
+    "Identify the GSAP(s) engaged, including name, organisation, accreditation number, and Green Star Buildings accreditation held.",
+    "GSAP workforce capacity and distribution across projects.")
+q += 1
 
-row = add_question(ws, row, f"{ref_base}.{q_num}", "Industry Development", "Credit Achievement",
+row = add_question(ws, row, f"{ref_base}.{q}", "Industry Development", "Credit Achievement",
     "Green Star Accredited Professional", "Descriptive",
-    "State the date the GSAP was first engaged on the project and the project phase at that time (e.g. concept design, schematic design). Confirm whether this was within one month of project registration.",
-    "Measures timing of sustainability expertise integration relative to design stage.")
-q_num += 1
+    "State the date and project phase when the GSAP was first engaged. Confirm engagement was within one month of registration.",
+    "Timing of sustainability expertise integration relative to design stage.")
+q += 1
 
-row = add_question(ws, row, f"{ref_base}.{q_num}", "Industry Development", "Credit Achievement",
+row = add_question(ws, row, f"{ref_base}.{q}", "Industry Development", "Credit Achievement",
     "Green Star Accredited Professional", "Descriptive",
-    "Describe the scope of the GSAP's engagement, including the advisory, coordination and support activities undertaken with the project team on Green Star strategy, principles, structure, timing and certification process.",
-    "Captures the depth of sustainability advisory services on projects.")
-q_num += 1
+    "Summarise the GSAP's scope of advisory and coordination activities on Green Star strategy, process and certification.",
+    "Depth of sustainability advisory services on projects.")
+q += 1
 
-row = add_question(ws, row, f"{ref_base}.{q_num}", "Industry Development", "Credit Achievement",
+row = add_question(ws, row, f"{ref_base}.{q}", "Industry Development", "Credit Achievement",
     "Green Star Accredited Professional", "Condition (Y/N)",
-    "Has the GSAP role been fulfilled by more than one individual or organisation during the project? (Yes/No)",
-    "Tracks continuity of sustainability expertise across project lifecycle.")
-q_num += 1
+    "Was the GSAP role fulfilled by more than one individual or organisation?",
+    "Continuity of sustainability expertise across project lifecycle.")
+q += 1
 
-row = add_question(ws, row, f"{ref_base}.{q_num}", "Industry Development", "Credit Achievement",
+row = add_question(ws, row, f"{ref_base}.{q}", "Industry Development", "Credit Achievement",
     "Green Star Accredited Professional", "Descriptive",
-    "If multiple GSAPs were involved, explain the transition between individuals and confirm each was accredited for Green Star Buildings for the duration of their engagement.",
+    "If multiple GSAPs, explain transitions and confirm each held valid Green Star Buildings accreditation throughout their engagement.",
     "")
-q_num += 1
+q += 1
 
-row = add_question(ws, row, f"{ref_base}.{q_num}", "Industry Development", "Credit Achievement",
+row = add_question(ws, row, f"{ref_base}.{q}", "Industry Development", "Credit Achievement",
     "Green Star Accredited Professional", "Descriptive",
-    "Confirm the GSAP is nominated as the 'Project Contact' for GBCA communications. Describe how ongoing input was maintained throughout the project (e.g. attendance at design meetings, coordination workshops).",
+    "Confirm the GSAP is the nominated Project Contact. Describe how ongoing involvement was maintained (e.g. design meetings, workshops).",
     "")
-q_num += 1
+q += 1
 
-# Criteria: Financial Transparency
+# ── Financial Transparency ──
 row = add_criteria_header(ws, row, "Financial Transparency")
 
-row = add_question(ws, row, f"{ref_base}.{q_num}", "Industry Development", "Credit Achievement",
+row = add_question(ws, row, f"{ref_base}.{q}", "Industry Development", "Credit Achievement",
     "Financial Transparency", "Descriptive",
-    "Confirm that the Financial Transparency disclosure template has been completed in its latest version and submitted in Excel format. Identify who prepared the cost data (e.g. quantity surveyor, head contractor, cost consultant).",
-    "Enables industry-wide benchmarking of sustainable building costs.")
-q_num += 1
+    "Confirm the Financial Transparency template was completed (latest version, Excel format). Identify who prepared the cost data.",
+    "Industry-wide benchmarking of sustainable building costs.")
+q += 1
 
-row = add_question(ws, row, f"{ref_base}.{q_num}", "Industry Development", "Credit Achievement",
+row = add_question(ws, row, f"{ref_base}.{q}", "Industry Development", "Credit Achievement",
     "Financial Transparency", "Descriptive",
-    "Describe the methodology used to determine the documentation cost and implementation cost of sustainable building practices, including how costs beyond the base (non-Green Star) requirement were isolated or estimated.",
-    "Supports research into cost premiums/savings of green building practices.")
-q_num += 1
+    "Explain how documentation and implementation costs for sustainable practices were isolated from the base (non-Green Star) requirement.",
+    "Cost premiums/savings of green building practices.")
+q += 1
 
-row = add_question(ws, row, f"{ref_base}.{q_num}", "Industry Development", "Credit Achievement",
+row = add_question(ws, row, f"{ref_base}.{q}", "Industry Development", "Credit Achievement",
     "Financial Transparency", "Data",
-    "Provide the total project construction cost and the total additional cost attributed to sustainable building practices (documentation + implementation).",
-    "Critical data point for cost-benefit analysis of green certification across the industry.")
-q_num += 1
+    "Provide total project construction cost and total additional cost for sustainable practices (documentation + implementation).",
+    "Cost-benefit analysis of green certification across the industry.")
+q += 1
 
-# Criteria: Marketing Sustainability Achievements
+# ── Marketing Sustainability Achievements ──
 row = add_criteria_header(ws, row, "Marketing Sustainability Achievements")
 
-row = add_question(ws, row, f"{ref_base}.{q_num}", "Industry Development", "Credit Achievement",
+row = add_question(ws, row, f"{ref_base}.{q}", "Industry Development", "Credit Achievement",
     "Marketing Sustainability Achievements", "Descriptive",
-    "List which three (or more) of the following marketing activities have been undertaken: (a) case study provided to GBCA, (b) digital screens installed to promote rating, (c) construction hoarding displays GBCA and targeted rating, (d) GBCA and rating central to marketing/communications strategy and promotional material.",
-    "Tracks industry adoption of sustainability marketing practices.")
-q_num += 1
+    "List which three or more marketing activities were undertaken: (a) case study to GBCA, (b) digital screens, (c) construction hoarding, (d) marketing/communications strategy.",
+    "Industry adoption of sustainability marketing practices.")
+q += 1
 
-row = add_question(ws, row, f"{ref_base}.{q_num}", "Industry Development", "Credit Achievement",
+row = add_question(ws, row, f"{ref_base}.{q}", "Industry Development", "Credit Achievement",
     "Marketing Sustainability Achievements", "Descriptive",
-    "Describe how the sustainability achievements and benefits of the project are communicated to building users, the public, and/or prospective tenants/buyers through the selected marketing channels.",
-    "Measures effectiveness and reach of green building awareness campaigns.")
-q_num += 1
+    "Describe how sustainability achievements are communicated to building users, the public, or prospective tenants/buyers.",
+    "Effectiveness and reach of green building awareness campaigns.")
+q += 1
 
-row = add_question(ws, row, f"{ref_base}.{q_num}", "Industry Development", "Credit Achievement",
+row = add_question(ws, row, f"{ref_base}.{q}", "Industry Development", "Credit Achievement",
     "Marketing Sustainability Achievements", "Data",
-    "Identify the target audience(s) for each sustainability marketing activity and the estimated reach (e.g. building occupants, public foot traffic, website visitors).",
-    "Quantifies public awareness exposure to green building benefits for future advocacy research.")
-q_num += 1
+    "Identify the target audience and estimated reach for each marketing activity.",
+    "Public awareness exposure to green building benefits.")
+q += 1
+
+apply_dropdowns(ws)
 
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -219,152 +240,153 @@ row = setup_sheet(ws2, "Responsible Construction")
 row = add_credit_header(ws2, row, "Responsible Construction",
     "The builder's construction practices reduce impacts and promote opportunities for improved environmental and social outcomes.")
 ref_base = "RC"
-q_num = 1
+q = 1
 
-# --- Minimum Expectation ---
 row = add_level_header(ws2, row, "Minimum Expectation (Nil points)")
 
-# Environmental Management System
+# ── Environmental Management System ──
 row = add_criteria_header(ws2, row, "Environmental Management System")
 
-row = add_question(ws2, row, f"{ref_base}.{q_num}", "Responsible Construction", "Minimum Expectation",
+row = add_question(ws2, row, f"{ref_base}.{q}", "Responsible Construction", "Minimum Expectation",
     "Environmental Management System", "Condition (Y/N)",
-    "Is the total contract value for any site works package (demolition, early works, or main works) $10 million or more? (Yes/No)",
-    "Benchmarks contract sizes relative to EMS certification thresholds.")
-q_num += 1
+    "Is any site works contract valued at $10 million or more?",
+    "Contract sizes relative to EMS certification thresholds.")
+q += 1
 
-row = add_question(ws2, row, f"{ref_base}.{q_num}", "Responsible Construction", "Minimum Expectation",
+row = add_question(ws2, row, f"{ref_base}.{q}", "Responsible Construction", "Minimum Expectation",
     "Environmental Management System", "Descriptive",
-    "For contracts valued at less than $10 million, describe how the Environmental Management System (EMS) complies with the NSW Environmental Management System Guidelines or another recognised framework. Identify the framework used.",
-    "Tracks which EMS frameworks are most commonly adopted by the construction industry.")
-q_num += 1
+    "For contracts under $10M, identify the EMS framework used and explain how it complies (e.g. NSW EMS Guidelines or equivalent).",
+    "EMS framework adoption rates in construction.")
+q += 1
 
-row = add_question(ws2, row, f"{ref_base}.{q_num}", "Responsible Construction", "Minimum Expectation",
+row = add_question(ws2, row, f"{ref_base}.{q}", "Responsible Construction", "Minimum Expectation",
     "Environmental Management System", "Descriptive",
-    "For contracts valued at $10 million or more, identify the standard to which the EMS is certified (AS/NZS ISO 14001, BS 7750, or EMAS) and confirm the certification was valid for the entire duration of site activities.",
-    "Measures uptake of certified environmental management in the construction sector.")
-q_num += 1
+    "For contracts $10M+, state the certified standard (ISO 14001, BS 7750, or EMAS) and confirm certification validity for the full duration of site works.",
+    "Uptake of certified environmental management in construction.")
+q += 1
 
-row = add_question(ws2, row, f"{ref_base}.{q_num}", "Responsible Construction", "Minimum Expectation",
+row = add_question(ws2, row, f"{ref_base}.{q}", "Responsible Construction", "Minimum Expectation",
     "Environmental Management System", "Condition (Y/N)",
-    "Were there different head contractors for demolition, early works, and main works? (Yes/No)",
+    "Were different head contractors used for demolition, early works, and main works?",
     "")
-q_num += 1
+q += 1
 
-row = add_question(ws2, row, f"{ref_base}.{q_num}", "Responsible Construction", "Minimum Expectation",
+row = add_question(ws2, row, f"{ref_base}.{q}", "Responsible Construction", "Minimum Expectation",
     "Environmental Management System", "Descriptive",
-    "If multiple head contractors were engaged, confirm each had an EMS in place for their scope of works and explain how the contract values were apportioned.",
+    "If multiple head contractors, confirm each had an EMS in place and explain how contract values were apportioned.",
     "")
-q_num += 1
+q += 1
 
-row = add_question(ws2, row, f"{ref_base}.{q_num}", "Responsible Construction", "Minimum Expectation",
+row = add_question(ws2, row, f"{ref_base}.{q}", "Responsible Construction", "Minimum Expectation",
     "Environmental Management System", "Descriptive",
-    "Explain how the EMS includes actions related to the implementation of the Environmental Management Plan (EMP), and describe the key environmental impacts targeted.",
-    "Documents the relationship between management systems and on-site environmental outcomes.")
-q_num += 1
+    "Explain how the EMS addresses implementation of the EMP and the key environmental impacts targeted.",
+    "Relationship between management systems and on-site environmental outcomes.")
+q += 1
 
-# Environmental Management Plan
+# ── Environmental Management Plan ──
 row = add_criteria_header(ws2, row, "Environmental Management Plan")
 
-row = add_question(ws2, row, f"{ref_base}.{q_num}", "Responsible Construction", "Minimum Expectation",
+row = add_question(ws2, row, f"{ref_base}.{q}", "Responsible Construction", "Minimum Expectation",
     "Environmental Management Plan", "Descriptive",
-    "Describe the project-specific Environmental Management Plan (EMP), including the key environmental performance conditions and impact areas it addresses (e.g. noise, dust, stormwater, vegetation protection).",
-    "Identifies the most common environmental risks managed during construction.")
-q_num += 1
+    "Outline the project-specific EMP, including key impact areas addressed (e.g. noise, dust, stormwater, vegetation).",
+    "Most common environmental risks managed during construction.")
+q += 1
 
-row = add_question(ws2, row, f"{ref_base}.{q_num}", "Responsible Construction", "Minimum Expectation",
+row = add_question(ws2, row, f"{ref_base}.{q}", "Responsible Construction", "Minimum Expectation",
     "Environmental Management Plan", "Descriptive",
-    "Confirm the EMP was in place for the full duration of all site works (demolition, early works, and main works). State the start and end dates of the EMP's application.",
-    "Tracks construction duration and environmental management coverage periods.")
-q_num += 1
+    "Confirm the EMP covered the full duration of all site works. State start and end dates.",
+    "Construction duration and environmental management coverage.")
+q += 1
 
-row = add_question(ws2, row, f"{ref_base}.{q_num}", "Responsible Construction", "Minimum Expectation",
+row = add_question(ws2, row, f"{ref_base}.{q}", "Responsible Construction", "Minimum Expectation",
     "Environmental Management Plan", "Descriptive",
-    "Describe the monitoring, auditing and reporting regime under the EMP, including the frequency of site audits and how non-conformances were managed and closed out.",
-    "Captures data on environmental compliance enforcement during construction.")
-q_num += 1
+    "Describe the audit and reporting regime, including frequency and how non-conformances were closed out.",
+    "Environmental compliance enforcement during construction.")
+q += 1
 
-row = add_question(ws2, row, f"{ref_base}.{q_num}", "Responsible Construction", "Minimum Expectation",
+row = add_question(ws2, row, f"{ref_base}.{q}", "Responsible Construction", "Minimum Expectation",
     "Environmental Management Plan", "Data",
-    "State the total number of environmental audits conducted, the number of non-conformances identified, and the percentage closed out during construction.",
-    "Provides quantitative data on construction environmental management performance.")
-q_num += 1
+    "Provide the total number of audits, non-conformances identified, and percentage closed out.",
+    "Quantitative construction environmental management performance.")
+q += 1
 
-# Construction and Demolition Waste Diversion
+# ── Construction and Demolition Waste Diversion ──
 row = add_criteria_header(ws2, row, "Construction and Demolition Waste Diversion")
 
-row = add_question(ws2, row, f"{ref_base}.{q_num}", "Responsible Construction", "Minimum Expectation",
+row = add_question(ws2, row, f"{ref_base}.{q}", "Responsible Construction", "Minimum Expectation",
     "Construction and Demolition Waste Diversion", "Data",
-    "State the total mass of site waste generated (in tonnes) and the total mass diverted from landfill. Provide the diversion rate as a percentage. Confirm this meets or exceeds the 80% threshold.",
-    "Critical benchmark data for construction waste diversion rates across the industry.")
-q_num += 1
+    "State total site waste (tonnes), total diverted from landfill (tonnes), and diversion rate (%). Confirm it meets the 80% threshold.",
+    "Construction waste diversion rate benchmarking.")
+q += 1
 
-row = add_question(ws2, row, f"{ref_base}.{q_num}", "Responsible Construction", "Minimum Expectation",
+row = add_question(ws2, row, f"{ref_base}.{q}", "Responsible Construction", "Minimum Expectation",
     "Construction and Demolition Waste Diversion", "Descriptive",
-    "Describe the waste streams generated on site and the diversion pathways used (e.g. recycling, reuse, recovery). Identify any waste streams excluded from the calculation (e.g. special waste, excavation waste) and justify the exclusions.",
-    "Maps waste stream composition and recycling pathways in the construction sector.")
-q_num += 1
+    "List waste streams and diversion pathways (recycling, reuse, recovery). Note any excluded streams (special/excavation waste) with justification.",
+    "Waste stream composition and recycling pathways in construction.")
+q += 1
 
-row = add_question(ws2, row, f"{ref_base}.{q_num}", "Responsible Construction", "Minimum Expectation",
+row = add_question(ws2, row, f"{ref_base}.{q}", "Responsible Construction", "Minimum Expectation",
     "Construction and Demolition Waste Diversion", "Descriptive",
-    "Explain how the waste contractors and processing facilities have provided a Disclosure Statement outlining alignment with the Green Star Construction and Demolition Waste Reporting Criteria.",
-    "Tracks supply chain transparency in waste management reporting.")
-q_num += 1
+    "Confirm waste contractors provided a Disclosure Statement aligned with the Green Star C&D Waste Reporting Criteria.",
+    "Supply chain transparency in waste reporting.")
+q += 1
 
-row = add_question(ws2, row, f"{ref_base}.{q_num}", "Responsible Construction", "Minimum Expectation",
+row = add_question(ws2, row, f"{ref_base}.{q}", "Responsible Construction", "Minimum Expectation",
     "Construction and Demolition Waste Diversion", "Data",
-    "Provide a breakdown of waste by material type (e.g. concrete, timber, steel, plasterboard, mixed) showing tonnes generated and tonnes diverted for each.",
-    "Enables material-specific waste benchmarking across construction projects.")
-q_num += 1
+    "Provide a breakdown by material type (e.g. concrete, timber, steel, plasterboard) showing tonnes generated and diverted.",
+    "Material-specific waste benchmarking across projects.")
+q += 1
 
-# Sustainability Training
+# ── Sustainability Training ──
 row = add_criteria_header(ws2, row, "Sustainability Training")
 
-row = add_question(ws2, row, f"{ref_base}.{q_num}", "Responsible Construction", "Minimum Expectation",
+row = add_question(ws2, row, f"{ref_base}.{q}", "Responsible Construction", "Minimum Expectation",
     "Sustainability Training", "Data",
-    "State the total number of contractors and subcontractors present on site for at least three days during all site works, the number who received sustainability training, and the resulting percentage.",
-    "Measures the reach of sustainability education in the construction workforce.")
-q_num += 1
+    "State total site workers on site 3+ days, number trained, and percentage. Confirm it meets the 95% threshold.",
+    "Sustainability education reach in the construction workforce.")
+q += 1
 
-row = add_question(ws2, row, f"{ref_base}.{q_num}", "Responsible Construction", "Minimum Expectation",
+row = add_question(ws2, row, f"{ref_base}.{q}", "Responsible Construction", "Minimum Expectation",
     "Sustainability Training", "Descriptive",
-    "Describe the content of the sustainability training provided, including how it covered: (a) sustainability attributes of the project and their benefits, (b) the value of certification, and (c) the role site workers play in delivering a sustainable building.",
-    "Captures training content quality and scope for workforce sustainability literacy research.")
-q_num += 1
+    "Summarise training content covering: (a) project sustainability attributes, (b) value of certification, (c) site workers' role in delivery.",
+    "Training content quality for workforce sustainability literacy.")
+q += 1
 
-row = add_question(ws2, row, f"{ref_base}.{q_num}", "Responsible Construction", "Minimum Expectation",
+row = add_question(ws2, row, f"{ref_base}.{q}", "Responsible Construction", "Minimum Expectation",
     "Sustainability Training", "Descriptive",
-    "Explain the delivery method and timing of the training (e.g. site induction, toolbox talks, dedicated sessions) and how attendance was tracked and verified.",
-    "Documents effective training delivery models for sustainability in construction.")
-q_num += 1
+    "Describe the delivery method (e.g. induction, toolbox talks) and how attendance was tracked.",
+    "Effective training delivery models for sustainability in construction.")
+q += 1
 
-# --- Credit Achievement ---
+# ── Credit Achievement ──
 row = add_level_header(ws2, row, "Credit Achievement (1 point)")
 row = add_criteria_header(ws2, row, "Increased Construction and Demolition Waste Diversion")
 
-row = add_question(ws2, row, f"{ref_base}.{q_num}", "Responsible Construction", "Credit Achievement",
-    "Increased Construction and Demolition Waste Diversion", "Data",
-    "State the total mass of site waste generated (in tonnes) and the total mass diverted from landfill. Confirm the diversion rate meets or exceeds 90%.",
-    "Higher-tier waste diversion benchmarking for industry best practice.")
-q_num += 1
+row = add_question(ws2, row, f"{ref_base}.{q}", "Responsible Construction", "Credit Achievement",
+    "Increased C&D Waste Diversion", "Data",
+    "State total site waste (tonnes), total diverted (tonnes), and diversion rate (%). Confirm it meets the 90% threshold.",
+    "Higher-tier waste diversion benchmarking.")
+q += 1
 
-row = add_question(ws2, row, f"{ref_base}.{q_num}", "Responsible Construction", "Credit Achievement",
-    "Increased Construction and Demolition Waste Diversion", "Descriptive",
-    "Describe how waste contractors and processing facilities comply with the Green Star Construction and Demolition Waste Reporting Criteria, including provision of the Compliance Verification Summary.",
-    "Assesses third-party waste reporting verification practices.")
-q_num += 1
+row = add_question(ws2, row, f"{ref_base}.{q}", "Responsible Construction", "Credit Achievement",
+    "Increased C&D Waste Diversion", "Descriptive",
+    "Confirm waste contractors/facilities provided a Compliance Verification Summary per the Green Star C&D Waste Reporting Criteria.",
+    "Third-party waste reporting verification practices.")
+q += 1
 
-row = add_question(ws2, row, f"{ref_base}.{q_num}", "Responsible Construction", "Credit Achievement",
-    "Increased Construction and Demolition Waste Diversion", "Descriptive",
-    "Identify the auditor(s) who verified waste reporting, including their credentials as specified in the Green Star Construction and Demolition Waste Reporting Criteria.",
-    "Tracks auditor capacity and verification standards in waste management.")
-q_num += 1
+row = add_question(ws2, row, f"{ref_base}.{q}", "Responsible Construction", "Credit Achievement",
+    "Increased C&D Waste Diversion", "Descriptive",
+    "Identify the waste reporting auditor(s) and their credentials per the Green Star C&D Waste Reporting Criteria.",
+    "Auditor capacity and verification standards in waste management.")
+q += 1
 
-row = add_question(ws2, row, f"{ref_base}.{q_num}", "Responsible Construction", "Credit Achievement",
-    "Increased Construction and Demolition Waste Diversion", "Data",
-    "List the waste processing facilities used, their location, and the types of waste they processed. Indicate whether any hold GECA Construction and Demolition Waste Services Standard certification.",
-    "Maps waste processing infrastructure availability and certification uptake.")
-q_num += 1
+row = add_question(ws2, row, f"{ref_base}.{q}", "Responsible Construction", "Credit Achievement",
+    "Increased C&D Waste Diversion", "Data",
+    "List waste processing facilities used, their location, waste types processed, and any GECA C&D Waste Services Standard certification held.",
+    "Waste processing infrastructure availability and certification uptake.")
+q += 1
+
+apply_dropdowns(ws2)
 
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -375,220 +397,221 @@ row = setup_sheet(ws3, "Verification and Handover")
 row = add_credit_header(ws3, row, "Verification and Handover",
     "The building has been optimised and handed over to deliver a higher level of performance in operation.")
 ref_base = "VH"
-q_num = 1
+q = 1
 
-# --- Minimum Expectation ---
 row = add_level_header(ws3, row, "Minimum Expectation (Nil points)")
 
-# Metering and Monitoring
+# ── Metering and Monitoring ──
 row = add_criteria_header(ws3, row, "Metering and Monitoring")
 
-row = add_question(ws3, row, f"{ref_base}.{q_num}", "Verification and Handover", "Minimum Expectation",
+row = add_question(ws3, row, f"{ref_base}.{q}", "Verification and Handover", "Minimum Expectation",
     "Metering and Monitoring", "Descriptive",
-    "Describe the metering strategy for the building, identifying how energy and water metering is provided for all distinct uses, major uses, and separate tenancies or units. Reference the metering schedule prepared in accordance with CIBSE TM39 (steps 7-10).",
-    "Captures metering granularity across building types for energy/water benchmarking research.")
-q_num += 1
+    "Outline the metering strategy for energy and water across all distinct uses, major uses, and tenancies/units, referencing the CIBSE TM39 schedule.",
+    "Metering granularity across building types.")
+q += 1
 
-row = add_question(ws3, row, f"{ref_base}.{q_num}", "Verification and Handover", "Minimum Expectation",
+row = add_question(ws3, row, f"{ref_base}.{q}", "Verification and Handover", "Minimum Expectation",
     "Metering and Monitoring", "Data",
-    "State the total number of energy meters and water meters installed, including utility meters and sub-meters. Provide the number of distinct end-uses metered.",
-    "Quantifies metering density for benchmarking across building typologies.")
-q_num += 1
+    "State the total number of energy and water meters (utility + sub-meters) and distinct end-uses metered.",
+    "Metering density benchmarking across building typologies.")
+q += 1
 
-row = add_question(ws3, row, f"{ref_base}.{q_num}", "Verification and Handover", "Minimum Expectation",
+row = add_question(ws3, row, f"{ref_base}.{q}", "Verification and Handover", "Minimum Expectation",
     "Metering and Monitoring", "Descriptive",
-    "Confirm all meters (utility and sub-meters) provide continual information at up to 1-hour intervals to the monitoring system, are commissioned and validated in accordance with NABERS Metering and Consumption Rules, and are pattern approved by the NMI or meet another recognised standard.",
-    "Tracks metering quality standards adoption.")
-q_num += 1
+    "Confirm all meters provide up to 1-hour interval readings, are validated per NABERS Metering Rules, and are NMI pattern-approved or meet an equivalent standard.",
+    "Metering quality standards adoption.")
+q += 1
 
-row = add_question(ws3, row, f"{ref_base}.{q_num}", "Verification and Handover", "Minimum Expectation",
+row = add_question(ws3, row, f"{ref_base}.{q}", "Verification and Handover", "Minimum Expectation",
     "Metering and Monitoring", "Descriptive",
-    "Describe the automatic monitoring system implemented, including how it provides consumption trend reports and generates alarms when energy or water use exceeds set parameters. Explain how alerts are communicated to the facilities manager.",
-    "Documents monitoring system capabilities for operational performance research.")
-q_num += 1
+    "Describe the automatic monitoring system, including consumption trend reporting and alarm/alert functionality for the facilities manager.",
+    "Monitoring system capabilities for operational performance.")
+q += 1
 
-row = add_question(ws3, row, f"{ref_base}.{q_num}", "Verification and Handover", "Minimum Expectation",
+row = add_question(ws3, row, f"{ref_base}.{q}", "Verification and Handover", "Minimum Expectation",
     "Metering and Monitoring", "Condition (Y/N)",
-    "Is this a Class 2 build-to-sell apartment project? (Yes/No)",
+    "Is this a Class 2 build-to-sell apartment project?",
     "")
-q_num += 1
+q += 1
 
-row = add_question(ws3, row, f"{ref_base}.{q_num}", "Verification and Handover", "Minimum Expectation",
+row = add_question(ws3, row, f"{ref_base}.{q}", "Verification and Handover", "Minimum Expectation",
     "Metering and Monitoring", "Descriptive",
-    "If this is a Class 2 build-to-sell project, confirm that base building consumption trends are provided to the facilities manager and explain how individual unit meters are handled.",
+    "If Class 2 build-to-sell, confirm base building trends are provided to the FM and explain how unit meters are handled.",
     "")
-q_num += 1
+q += 1
 
-row = add_question(ws3, row, f"{ref_base}.{q_num}", "Verification and Handover", "Minimum Expectation",
+row = add_question(ws3, row, f"{ref_base}.{q}", "Verification and Handover", "Minimum Expectation",
     "Metering and Monitoring", "Condition (Y/N)",
-    "Does the base building metering strategy rely on connection of tenant meters? (Yes/No)",
+    "Does the metering strategy rely on connection of tenant meters?",
     "")
-q_num += 1
+q += 1
 
-row = add_question(ws3, row, f"{ref_base}.{q_num}", "Verification and Handover", "Minimum Expectation",
+row = add_question(ws3, row, f"{ref_base}.{q}", "Verification and Handover", "Minimum Expectation",
     "Metering and Monitoring", "Descriptive",
-    "If the strategy relies on tenant meters, describe the tenancy fitout guide and/or model lease clauses used to ensure tenant meter connection and monitoring system programming requirements are met.",
+    "If relying on tenant meters, describe the fitout guide or lease clauses ensuring meter connection and monitoring requirements.",
     "")
-q_num += 1
+q += 1
 
-# Commissioning and Tuning
+# ── Commissioning and Tuning ──
 row = add_criteria_header(ws3, row, "Commissioning and Tuning")
 
-row = add_question(ws3, row, f"{ref_base}.{q_num}", "Verification and Handover", "Minimum Expectation",
+row = add_question(ws3, row, f"{ref_base}.{q}", "Verification and Handover", "Minimum Expectation",
     "Commissioning and Tuning", "Descriptive",
-    "Describe the environmental performance targets documented prior to schematic design, covering energy use, water consumption, indoor environment quality, and airtightness. Confirm the design intent report or OPR was signed off by the building owner.",
-    "Captures the target-setting practices that drive building performance outcomes.")
-q_num += 1
+    "Summarise environmental performance targets (energy, water, IEQ, airtightness) set prior to schematic design. Confirm owner sign-off on the design intent report or OPR.",
+    "Target-setting practices driving building performance outcomes.")
+q += 1
 
-row = add_question(ws3, row, f"{ref_base}.{q_num}", "Verification and Handover", "Minimum Expectation",
+row = add_question(ws3, row, f"{ref_base}.{q}", "Verification and Handover", "Minimum Expectation",
     "Commissioning and Tuning", "Data",
-    "Provide the specific numerical targets set for: (a) energy use intensity (kWh/m²/yr or similar), (b) water consumption (kL/yr or similar), (c) indoor environment quality parameters, and (d) airtightness (air permeability rate).",
-    "Enables benchmarking of design targets against actual operational performance across projects.")
-q_num += 1
+    "Provide numerical targets for: (a) energy use intensity, (b) water consumption, (c) IEQ parameters, (d) airtightness rate.",
+    "Design target benchmarking against actual operational performance.")
+q += 1
 
-row = add_question(ws3, row, f"{ref_base}.{q_num}", "Verification and Handover", "Minimum Expectation",
+row = add_question(ws3, row, f"{ref_base}.{q}", "Verification and Handover", "Minimum Expectation",
     "Commissioning and Tuning", "Descriptive",
-    "Describe the services and maintainability review conducted prior to construction, including who participated (building owner, design consultants, architect, facilities manager, head contractor, ICA) and the key outcomes documented in the Services and Maintainability Report.",
-    "Documents stakeholder collaboration in pre-construction reviews.")
-q_num += 1
+    "Summarise the services and maintainability review: participants, key outcomes, and close-out status in the Services and Maintainability Report.",
+    "Stakeholder collaboration in pre-construction reviews.")
+q += 1
 
-row = add_question(ws3, row, f"{ref_base}.{q_num}", "Verification and Handover", "Minimum Expectation",
+row = add_question(ws3, row, f"{ref_base}.{q}", "Verification and Handover", "Minimum Expectation",
     "Commissioning and Tuning", "Descriptive",
-    "Identify the recognised commissioning standard or guideline followed (e.g. AIRAH DA27, ASHRAE Standard 202-2024, CIBSE Commissioning Code M, SA TA 5342:2021). Describe the commissioning plan, including the process, activities and program for commissioning all nominated building systems.",
-    "Tracks adoption of commissioning standards across the industry.")
-q_num += 1
+    "Identify the commissioning standard followed (e.g. AIRAH DA27, ASHRAE 202, CIBSE Code M). Outline the commissioning plan scope and program.",
+    "Commissioning standard adoption rates.")
+q += 1
 
-row = add_question(ws3, row, f"{ref_base}.{q_num}", "Verification and Handover", "Minimum Expectation",
+row = add_question(ws3, row, f"{ref_base}.{q}", "Verification and Handover", "Minimum Expectation",
     "Commissioning and Tuning", "Descriptive",
-    "List all nominated building systems included in the commissioning scope (e.g. HVAC, BMCS, lighting, electrical, hydraulic, fire, lifts). Confirm commissioning requirements were included in construction documentation prior to the start of relevant trade packages.",
-    "Maps the extent of building systems commissioning across projects.")
-q_num += 1
+    "List all nominated building systems commissioned (e.g. HVAC, BMCS, lighting, electrical, hydraulic, fire, lifts).",
+    "Extent of building systems commissioning across projects.")
+q += 1
 
-row = add_question(ws3, row, f"{ref_base}.{q_num}", "Verification and Handover", "Minimum Expectation",
+row = add_question(ws3, row, f"{ref_base}.{q}", "Verification and Handover", "Minimum Expectation",
     "Commissioning and Tuning", "Descriptive",
-    "Describe how airtightness targets were set based on the ATTMA Australia Guide for Airtightness Targets, including how targets were defined for different building compartments where applicable. Explain how the air barrier system schematic was reviewed prior to end of design development to reduce risks.",
-    "Captures industry approach to airtightness design integration.")
-q_num += 1
+    "Explain how airtightness targets were set (per ATTMA Guide) and how the air barrier schematic was reviewed before end of design development.",
+    "Airtightness design integration practices.")
+q += 1
 
-row = add_question(ws3, row, f"{ref_base}.{q_num}", "Verification and Handover", "Minimum Expectation",
+row = add_question(ws3, row, f"{ref_base}.{q}", "Verification and Handover", "Minimum Expectation",
     "Commissioning and Tuning", "Descriptive",
-    "Describe the airtightness testing undertaken, including: the testing practitioner's ATTMA membership level, the testing standard followed (AS/NZS ISO 9972 Method 1), the areas tested (whole building or sample), and how both typical and high-risk assemblies were selected.",
-    "Provides data on airtightness testing practices and practitioner qualifications.")
-q_num += 1
+    "Describe airtightness testing: practitioner's ATTMA level, standard followed (AS/NZS ISO 9972), areas tested (whole building or sample), and selection of high-risk assemblies.",
+    "Airtightness testing practices and practitioner qualifications.")
+q += 1
 
-row = add_question(ws3, row, f"{ref_base}.{q_num}", "Verification and Handover", "Minimum Expectation",
+row = add_question(ws3, row, f"{ref_base}.{q}", "Verification and Handover", "Minimum Expectation",
     "Commissioning and Tuning", "Data",
-    "Provide the airtightness test results (air permeability rates achieved) for each tested area. State whether the targets were met and, if not, identify the opportunities for improvement shared with the building owner.",
-    "Key performance data for benchmarking building envelope quality across the industry.")
-q_num += 1
+    "Provide airtightness results (air permeability rates) per tested area. Note whether targets were met and any improvement opportunities identified.",
+    "Building envelope quality benchmarking.")
+q += 1
 
-row = add_question(ws3, row, f"{ref_base}.{q_num}", "Verification and Handover", "Minimum Expectation",
+row = add_question(ws3, row, f"{ref_base}.{q}", "Verification and Handover", "Minimum Expectation",
     "Commissioning and Tuning", "Descriptive",
-    "Describe the building systems tuning commitment, including: the contractual arrangement between building owner and head contractor, the tuning manual/plan, and the roles and responsibilities of the tuning team (facilities manager, ICA, head contractor, subcontractors).",
-    "Documents industry approaches to post-occupancy building optimisation.")
-q_num += 1
+    "Describe the tuning commitment: contractual arrangement, tuning plan, and team roles (FM, ICA, head contractor, subcontractors).",
+    "Post-occupancy building optimisation approaches.")
+q += 1
 
-row = add_question(ws3, row, f"{ref_base}.{q_num}", "Verification and Handover", "Minimum Expectation",
+row = add_question(ws3, row, f"{ref_base}.{q}", "Verification and Handover", "Minimum Expectation",
     "Commissioning and Tuning", "Data",
-    "State the planned duration of the tuning process (minimum 12 months) and the frequency of adjustments and measurements (minimum quarterly). Identify the start date of the tuning period.",
-    "Tracks tuning duration and frequency as indicators of operational optimisation commitment.")
-q_num += 1
+    "State tuning duration (min. 12 months), frequency of adjustments (min. quarterly), and planned start date.",
+    "Tuning duration and frequency indicators.")
+q += 1
 
-# Building Information
+# ── Building Information ──
 row = add_criteria_header(ws3, row, "Building Information")
 
-row = add_question(ws3, row, f"{ref_base}.{q_num}", "Verification and Handover", "Minimum Expectation",
+row = add_question(ws3, row, f"{ref_base}.{q}", "Verification and Handover", "Minimum Expectation",
     "Building Information", "Descriptive",
-    "Describe the operations and maintenance information provided to the building owner, including how it covers maintenance procedures, schedules, service contacts, warranties, and as-built drawings for all nominated building systems.",
-    "Assesses completeness of handover documentation practices.")
-q_num += 1
+    "Summarise the O&M information provided: maintenance procedures, schedules, contacts, warranties, and as-built drawings for nominated systems.",
+    "Handover documentation completeness.")
+q += 1
 
-row = add_question(ws3, row, f"{ref_base}.{q_num}", "Verification and Handover", "Minimum Expectation",
+row = add_question(ws3, row, f"{ref_base}.{q}", "Verification and Handover", "Minimum Expectation",
     "Building Information", "Descriptive",
-    "Explain how the operations and maintenance information includes guidance for the facilities management team on keeping the information up to date and assessing, correcting, and validating alerts or faults from the monitoring system.",
+    "Explain how O&M information guides the FM team on keeping records current and responding to monitoring system alerts/faults.",
     "")
-q_num += 1
+q += 1
 
-row = add_question(ws3, row, f"{ref_base}.{q_num}", "Verification and Handover", "Minimum Expectation",
+row = add_question(ws3, row, f"{ref_base}.{q}", "Verification and Handover", "Minimum Expectation",
     "Building Information", "Descriptive",
-    "Describe the building logbook developed in accordance with CIBSE TM31 Building Logbook Toolkit. Confirm it covers all nominated building systems and was presented to the building owner prior to occupation.",
-    "Tracks adoption of structured building logbook practices.")
-q_num += 1
+    "Confirm a CIBSE TM31 building logbook was prepared covering all nominated systems and delivered to the owner prior to occupation.",
+    "Building logbook adoption rates.")
+q += 1
 
-row = add_question(ws3, row, f"{ref_base}.{q_num}", "Verification and Handover", "Minimum Expectation",
+row = add_question(ws3, row, f"{ref_base}.{q}", "Verification and Handover", "Minimum Expectation",
     "Building Information", "Descriptive",
-    "Describe the building user information provided, including: how it is publicly available to intended building users, how the content is relevant and easily understood by the target audience, and the digital format used (e.g. website, app, digital signage).",
-    "Captures approaches to engaging building occupants in sustainable operations.")
-q_num += 1
+    "Describe building user information: availability to occupants, relevance to audience, and digital format used (e.g. website, app, signage).",
+    "Approaches to engaging occupants in sustainable operations.")
+q += 1
 
-row = add_question(ws3, row, f"{ref_base}.{q_num}", "Verification and Handover", "Minimum Expectation",
+row = add_question(ws3, row, f"{ref_base}.{q}", "Verification and Handover", "Minimum Expectation",
     "Building Information", "Descriptive",
-    "Confirm the building user information is provided in an editable, digital format accessible to the facilities management team for updates. Describe the format and platform used.",
-    "Tracks digital information management maturity in building operations.")
-q_num += 1
+    "Confirm user information is in an editable digital format accessible to the FM team. State the format/platform.",
+    "Digital information management maturity in building operations.")
+q += 1
 
-# --- Credit Achievement ---
+# ── Credit Achievement ──
 row = add_level_header(ws3, row, "Credit Achievement (1 point)")
 
-row = add_question(ws3, row, f"{ref_base}.{q_num}", "Verification and Handover", "Credit Achievement",
+row = add_question(ws3, row, f"{ref_base}.{q}", "Verification and Handover", "Credit Achievement",
     "General", "Condition (Y/N)",
-    "Is the Total Building Services Value of the project over $20 million? (Yes/No) Note: If yes, both Soft Landings Approach and Independent Commissioning Agent criteria must be met.",
-    "Benchmarks building services expenditure relative to commissioning requirements.")
-q_num += 1
+    "Is the Total Building Services Value over $20 million? (If yes, both Soft Landings and ICA criteria must be met.)",
+    "Building services expenditure relative to commissioning requirements.")
+q += 1
 
-# Soft Landings Approach
+# ── Soft Landings Approach ──
 row = add_criteria_header(ws3, row, "Soft Landings Approach")
 
-row = add_question(ws3, row, f"{ref_base}.{q_num}", "Verification and Handover", "Credit Achievement",
+row = add_question(ws3, row, f"{ref_base}.{q}", "Verification and Handover", "Credit Achievement",
     "Soft Landings Approach", "Descriptive",
-    "Describe how Stages 1 to 4 of the CIBSE ANZ Soft Landings Framework Australia and New Zealand have been implemented on the project. Confirm the sample worksheets for Stages 1-3 are completed and actions for Stage 4 are identified.",
-    "Tracks adoption and implementation quality of soft landings framework across projects.")
-q_num += 1
+    "Describe implementation of CIBSE ANZ Soft Landings Stages 1-4. Confirm worksheets for Stages 1-3 are completed and Stage 4 actions identified.",
+    "Soft landings adoption and implementation quality.")
+q += 1
 
-row = add_question(ws3, row, f"{ref_base}.{q_num}", "Verification and Handover", "Credit Achievement",
+row = add_question(ws3, row, f"{ref_base}.{q}", "Verification and Handover", "Credit Achievement",
     "Soft Landings Approach", "Descriptive",
-    "Describe how the facilities management team (or building owner's representative) was involved in the soft landings approach, including their role in: commissioning and handover, developing the brief technical guide and operations manual, sign-off on the O&M manual, and training received before handover.",
-    "Documents FM involvement in building transition for performance gap research.")
-q_num += 1
+    "Describe the FM team's involvement: commissioning participation, O&M manual development and sign-off, and pre-handover training received.",
+    "FM involvement in building transition and performance gap.")
+q += 1
 
-row = add_question(ws3, row, f"{ref_base}.{q_num}", "Verification and Handover", "Credit Achievement",
+row = add_question(ws3, row, f"{ref_base}.{q}", "Verification and Handover", "Credit Achievement",
     "Soft Landings Approach", "Descriptive",
-    "Explain the arrangements in place for the facilities management team to have continued access to critical design and construction team members for two years after practical completion.",
-    "Measures post-handover support duration and structure.")
-q_num += 1
+    "Explain arrangements for FM access to design and construction team members for two years post practical completion.",
+    "Post-handover support duration and structure.")
+q += 1
 
-row = add_question(ws3, row, f"{ref_base}.{q_num}", "Verification and Handover", "Credit Achievement",
+row = add_question(ws3, row, f"{ref_base}.{q}", "Verification and Handover", "Credit Achievement",
     "Soft Landings Approach", "Condition (Y/N)",
-    "Has Stage 5 (post-occupancy evaluation) of the Soft Landings Framework been planned or implemented? (Yes/No)",
-    "Tracks voluntary post-occupancy evaluation uptake.")
-q_num += 1
+    "Has Stage 5 (post-occupancy evaluation) been planned or implemented?",
+    "Voluntary post-occupancy evaluation uptake.")
+q += 1
 
-# Independent Commissioning Agent
+# ── Independent Commissioning Agent ──
 row = add_criteria_header(ws3, row, "Independent Commissioning Agent")
 
-row = add_question(ws3, row, f"{ref_base}.{q_num}", "Verification and Handover", "Credit Achievement",
+row = add_question(ws3, row, f"{ref_base}.{q}", "Verification and Handover", "Credit Achievement",
     "Independent Commissioning Agent", "Descriptive",
-    "Identify the Independent Commissioning Agent (ICA) appointed, including their qualifications (registered professional engineer or qualified technician), demonstrated knowledge of commissioning, and experience with at least 2 projects of similar scope.",
-    "Tracks ICA workforce capacity and qualification levels.")
-q_num += 1
+    "Identify the ICA: qualifications, commissioning knowledge, and experience with 2+ similar projects.",
+    "ICA workforce capacity and qualification levels.")
+q += 1
 
-row = add_question(ws3, row, f"{ref_base}.{q_num}", "Verification and Handover", "Credit Achievement",
+row = add_question(ws3, row, f"{ref_base}.{q}", "Verification and Handover", "Credit Achievement",
     "Independent Commissioning Agent", "Descriptive",
-    "Confirm the ICA was appointed prior to design development and is independent of any consultant, contractor, or sub-contractor involved in design or installation. Describe who the ICA reports to and their relationship to the project owner.",
-    "Documents independence arrangements in commissioning oversight.")
-q_num += 1
+    "Confirm the ICA was appointed before design development and is independent of all design/installation consultants and contractors.",
+    "Independence arrangements in commissioning oversight.")
+q += 1
 
-row = add_question(ws3, row, f"{ref_base}.{q_num}", "Verification and Handover", "Credit Achievement",
+row = add_question(ws3, row, f"{ref_base}.{q}", "Verification and Handover", "Credit Achievement",
     "Independent Commissioning Agent", "Descriptive",
-    "Describe the ICA's involvement across project phases (design development, tender, construction, commissioning, and tuning), including key activities and oversight provided at each stage.",
-    "Captures the breadth of ICA involvement for commissioning effectiveness research.")
-q_num += 1
+    "Summarise the ICA's involvement across phases: design development, tender, construction, commissioning, and tuning.",
+    "Breadth of ICA involvement for commissioning effectiveness.")
+q += 1
 
-row = add_question(ws3, row, f"{ref_base}.{q_num}", "Verification and Handover", "Credit Achievement",
+row = add_question(ws3, row, f"{ref_base}.{q}", "Verification and Handover", "Credit Achievement",
     "Independent Commissioning Agent", "Condition (Y/N)",
-    "Is the ICA role fulfilled by more than one person? (Yes/No) If yes, confirm each meets the qualification and independence requirements.",
+    "Is the ICA role fulfilled by more than one person?",
     "")
-q_num += 1
+q += 1
+
+apply_dropdowns(ws3)
 
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -599,115 +622,116 @@ row = setup_sheet(ws4, "Responsible Resource Mgmt")
 row = add_credit_header(ws4, row, "Responsible Resource Management",
     "Operational waste and resources can be separated and recovered in a safe and efficient manner.")
 ref_base = "RRM"
-q_num = 1
+q = 1
 
-# --- Minimum Expectation ---
 row = add_level_header(ws4, row, "Minimum Expectation (Nil points)")
 
-# Collection of Waste Streams
+# ── Collection of Waste Streams ──
 row = add_criteria_header(ws4, row, "Collection of Waste Streams")
 
-row = add_question(ws4, row, f"{ref_base}.{q_num}", "Responsible Resource Management", "Minimum Expectation",
+row = add_question(ws4, row, f"{ref_base}.{q}", "Responsible Resource Management", "Minimum Expectation",
     "Collection of Waste Streams", "Descriptive",
-    "List all the waste streams the building enables to be collected separately, including as a minimum: general waste, paper and cardboard, glass, plastic, and one additional stream (e.g. organics, e-waste, batteries). Identify the additional stream selected and justify why it was chosen.",
-    "Tracks the diversity of operational waste separation across building types.")
-q_num += 1
+    "List all separately collected waste streams (min: general waste, paper/cardboard, glass, plastic, plus one additional). Justify the additional stream selected.",
+    "Diversity of operational waste separation across building types.")
+q += 1
 
-row = add_question(ws4, row, f"{ref_base}.{q_num}", "Responsible Resource Management", "Minimum Expectation",
+row = add_question(ws4, row, f"{ref_base}.{q}", "Responsible Resource Management", "Minimum Expectation",
     "Collection of Waste Streams", "Condition (Y/N)",
-    "Is any single non-food waste stream (excluding the listed recycling streams) expected to represent more than 5% of total annual operational waste by volume? (Yes/No)",
-    "Identifies dominant waste streams for targeted waste reduction strategies.")
-q_num += 1
+    "Is any single non-food waste stream expected to exceed 5% of total annual operational waste by volume?",
+    "Dominant waste streams for targeted reduction strategies.")
+q += 1
 
-row = add_question(ws4, row, f"{ref_base}.{q_num}", "Responsible Resource Management", "Minimum Expectation",
+row = add_question(ws4, row, f"{ref_base}.{q}", "Responsible Resource Management", "Minimum Expectation",
     "Collection of Waste Streams", "Descriptive",
-    "If yes, identify the waste stream(s) exceeding 5% and describe the separate collection provisions made for each.",
+    "If yes, identify the stream(s) exceeding 5% and describe their separate collection provisions.",
     "")
-q_num += 1
+q += 1
 
-row = add_question(ws4, row, f"{ref_base}.{q_num}", "Responsible Resource Management", "Minimum Expectation",
+row = add_question(ws4, row, f"{ref_base}.{q}", "Responsible Resource Management", "Minimum Expectation",
     "Collection of Waste Streams", "Descriptive",
-    "Describe the location and distribution of chute intakes, bins, or storage containers across the building. Explain how they are positioned close to points of waste generation and how they are labelled for each waste stream.",
-    "Documents waste infrastructure design approaches for occupant convenience research.")
-q_num += 1
+    "Describe bin/chute intake locations, proximity to waste generation points, and labelling approach.",
+    "Waste infrastructure design for occupant convenience.")
+q += 1
 
-row = add_question(ws4, row, f"{ref_base}.{q_num}", "Responsible Resource Management", "Minimum Expectation",
+row = add_question(ws4, row, f"{ref_base}.{q}", "Responsible Resource Management", "Minimum Expectation",
     "Collection of Waste Streams", "Condition (Y/N)",
-    "Does the project include cold shell or excluded tenancy spaces where fitout is not within the scope of the rating? (Yes/No)",
+    "Does the project include cold shell or excluded tenancy spaces outside the rating scope?",
     "")
-q_num += 1
+q += 1
 
-row = add_question(ws4, row, f"{ref_base}.{q_num}", "Responsible Resource Management", "Minimum Expectation",
+row = add_question(ws4, row, f"{ref_base}.{q}", "Responsible Resource Management", "Minimum Expectation",
     "Collection of Waste Streams", "Descriptive",
-    "If the project includes cold shell or excluded tenancy spaces, describe the tenancy fitout guide, model lease clauses, or supply contracts used to ensure waste stream separation requirements are met within those spaces.",
+    "If yes, describe fitout guide, lease clauses, or contracts ensuring waste separation in those spaces.",
     "")
-q_num += 1
+q += 1
 
-row = add_question(ws4, row, f"{ref_base}.{q_num}", "Responsible Resource Management", "Minimum Expectation",
+row = add_question(ws4, row, f"{ref_base}.{q}", "Responsible Resource Management", "Minimum Expectation",
     "Collection of Waste Streams", "Condition (Y/N)",
-    "Is co-mingled recycling used for any waste streams? (Yes/No)",
-    "Tracks prevalence of co-mingled vs source-separated recycling.")
-q_num += 1
+    "Is co-mingled recycling used for any waste streams?",
+    "Prevalence of co-mingled vs source-separated recycling.")
+q += 1
 
-row = add_question(ws4, row, f"{ref_base}.{q_num}", "Responsible Resource Management", "Minimum Expectation",
+row = add_question(ws4, row, f"{ref_base}.{q}", "Responsible Resource Management", "Minimum Expectation",
     "Collection of Waste Streams", "Descriptive",
-    "If co-mingled recycling is used, identify which streams are co-mingled and confirm this is accepted by the waste collection service. Confirm remaining streams are still collected separately.",
+    "If co-mingled, identify which streams and confirm acceptance by the waste collection service.",
     "")
-q_num += 1
+q += 1
 
-# Dedicated Waste Storage Area
+# ── Dedicated Waste Storage Area ──
 row = add_criteria_header(ws4, row, "Dedicated Waste Storage Area")
 
-row = add_question(ws4, row, f"{ref_base}.{q_num}", "Responsible Resource Management", "Minimum Expectation",
+row = add_question(ws4, row, f"{ref_base}.{q}", "Responsible Resource Management", "Minimum Expectation",
     "Dedicated Waste Storage Area", "Descriptive",
-    "Describe the dedicated waste storage area(s), including location within the building, total area provided, and how the space is laid out to keep all applicable waste streams separate prior to off-site collection.",
-    "Captures waste storage design patterns across building types.")
-q_num += 1
+    "Describe the storage area(s): location, total area, and layout for keeping waste streams separate.",
+    "Waste storage design patterns across building types.")
+q += 1
 
-row = add_question(ws4, row, f"{ref_base}.{q_num}", "Responsible Resource Management", "Minimum Expectation",
+row = add_question(ws4, row, f"{ref_base}.{q}", "Responsible Resource Management", "Minimum Expectation",
     "Dedicated Waste Storage Area", "Data",
-    "Provide the forecasted waste generation rates used to size the storage area, the collection frequency assumed for each waste stream, and the resulting storage capacity calculations. Identify the third-party best practice guideline used for waste generation rates.",
-    "Provides waste generation rate data for cross-project benchmarking research.")
-q_num += 1
+    "Provide forecasted waste generation rates, collection frequency per stream, and storage capacity calculations. Identify the best practice guideline used.",
+    "Waste generation rate data for cross-project benchmarking.")
+q += 1
 
-row = add_question(ws4, row, f"{ref_base}.{q_num}", "Responsible Resource Management", "Minimum Expectation",
+row = add_question(ws4, row, f"{ref_base}.{q}", "Responsible Resource Management", "Minimum Expectation",
     "Dedicated Waste Storage Area", "Descriptive",
-    "Describe how collection vehicles can safely access the waste storage area, including provisions for parking adjacent to the area, driveways, height clearances, and manoeuvring areas in accordance with AS 2890.2:2018.",
-    "Documents waste collection logistics design for operational efficiency research.")
-q_num += 1
+    "Describe collection vehicle access: parking, driveways, height clearances, and manoeuvring per AS 2890.2:2018.",
+    "Waste collection logistics design.")
+q += 1
 
-row = add_question(ws4, row, f"{ref_base}.{q_num}", "Responsible Resource Management", "Minimum Expectation",
+row = add_question(ws4, row, f"{ref_base}.{q}", "Responsible Resource Management", "Minimum Expectation",
     "Dedicated Waste Storage Area", "Condition (Y/N)",
-    "Is this a tenanted building where excluded tenancy spaces contribute to the waste storage strategy? (Yes/No)",
+    "Is this a tenanted building where excluded tenancies contribute to the waste storage strategy?",
     "")
-q_num += 1
+q += 1
 
-row = add_question(ws4, row, f"{ref_base}.{q_num}", "Responsible Resource Management", "Minimum Expectation",
+row = add_question(ws4, row, f"{ref_base}.{q}", "Responsible Resource Management", "Minimum Expectation",
     "Dedicated Waste Storage Area", "Descriptive",
-    "If yes, explain how potential waste quantities from excluded tenancy spaces have been accounted for in the storage area sizing, including the estimation methodology used.",
+    "If yes, explain how waste from excluded tenancies was estimated and factored into storage sizing.",
     "")
-q_num += 1
+q += 1
 
-# Safe and Efficient Access to Waste Storage
+# ── Safe and Efficient Access to Waste Storage ──
 row = add_criteria_header(ws4, row, "Safe and Efficient Access to Waste Storage")
 
-row = add_question(ws4, row, f"{ref_base}.{q_num}", "Responsible Resource Management", "Minimum Expectation",
+row = add_question(ws4, row, f"{ref_base}.{q}", "Responsible Resource Management", "Minimum Expectation",
     "Safe and Efficient Access to Waste Storage", "Descriptive",
-    "Identify the waste specialist and/or waste contractor who signed off on the waste storage designs. Include their name, organisation, and confirm they have a minimum of three years' experience developing operational waste management plans.",
-    "Tracks waste specialist involvement in building design.")
-q_num += 1
+    "Identify the waste specialist/contractor who signed off on designs, including their organisation and relevant experience (min. 3 years).",
+    "Waste specialist involvement in building design.")
+q += 1
 
-row = add_question(ws4, row, f"{ref_base}.{q_num}", "Responsible Resource Management", "Minimum Expectation",
+row = add_question(ws4, row, f"{ref_base}.{q}", "Responsible Resource Management", "Minimum Expectation",
     "Safe and Efficient Access to Waste Storage", "Descriptive",
-    "Describe the key findings of the waste specialist/contractor sign-off, including confirmation that the storage areas are adequately sized and located for the safe and convenient storage and collection of all identified waste streams.",
-    "Documents waste management design validation practices.")
-q_num += 1
+    "Summarise the sign-off findings confirming storage areas are adequately sized and located for safe collection.",
+    "Waste management design validation practices.")
+q += 1
 
-row = add_question(ws4, row, f"{ref_base}.{q_num}", "Responsible Resource Management", "Minimum Expectation",
+row = add_question(ws4, row, f"{ref_base}.{q}", "Responsible Resource Management", "Minimum Expectation",
     "Safe and Efficient Access to Waste Storage", "Data",
-    "State the total building GFA, the number of occupants or units served, the total waste storage area provided (m²), and the estimated total annual operational waste (tonnes/year or m³/year).",
-    "Key data for developing waste generation benchmarks normalised by building size and occupancy.")
-q_num += 1
+    "Provide: building GFA, number of occupants/units, waste storage area (m²), and estimated annual operational waste (tonnes or m³/year).",
+    "Waste generation benchmarks normalised by building size and occupancy.")
+q += 1
+
+apply_dropdowns(ws4)
 
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -718,100 +742,101 @@ row = setup_sheet(ws5, "Responsible Procurement")
 row = add_credit_header(ws5, row, "Responsible Procurement",
     "The procurement process for key products, materials, and services follows best practice environmental and social principles.")
 ref_base = "RP"
-q_num = 1
+q = 1
 
-# --- Credit Achievement ---
 row = add_level_header(ws5, row, "Credit Achievement (1 point)")
 
-# Risk and Opportunity Assessment
+# ── Risk and Opportunity Assessment ──
 row = add_criteria_header(ws5, row, "Risk and Opportunity Assessment")
 
-row = add_question(ws5, row, f"{ref_base}.{q_num}", "Responsible Procurement", "Credit Achievement",
+row = add_question(ws5, row, f"{ref_base}.{q}", "Responsible Procurement", "Credit Achievement",
     "Risk and Opportunity Assessment", "Descriptive",
-    "Confirm the risk and opportunity assessment was completed prior to appointment of the head contractor for main works. Identify who conducted the assessment (project design team) and confirm input was obtained from the building owner.",
-    "Tracks timing and stakeholder involvement in supply chain risk assessment.")
-q_num += 1
+    "Confirm the assessment was completed before head contractor appointment. Identify assessors and confirm building owner input.",
+    "Timing and stakeholder involvement in supply chain risk assessment.")
+q += 1
 
-row = add_question(ws5, row, f"{ref_base}.{q_num}", "Responsible Procurement", "Credit Achievement",
+row = add_question(ws5, row, f"{ref_base}.{q}", "Responsible Procurement", "Credit Achievement",
     "Risk and Opportunity Assessment", "Descriptive",
-    "List the 10 or more key items identified in the project's supply chain, confirming at least two are building services and at least one is a building material. For each item, briefly explain why it was selected as a key item.",
-    "Maps supply chain risk hotspots across building projects for industry-wide risk profiling.")
-q_num += 1
+    "List the 10+ key supply chain items (min. 2 building services, 1 building material). Briefly justify each selection.",
+    "Supply chain risk hotspots across building projects.")
+q += 1
 
-row = add_question(ws5, row, f"{ref_base}.{q_num}", "Responsible Procurement", "Credit Achievement",
+row = add_question(ws5, row, f"{ref_base}.{q}", "Responsible Procurement", "Credit Achievement",
     "Risk and Opportunity Assessment", "Descriptive",
-    "Describe how environmental, social, and human health risks and opportunities were identified and evaluated for each key item, with reference to the following issue areas from ISO 20400:2017 Clause 4.3: (a) human rights, (b) labour practices, (c) the environment, (d) fair operating practices, (e) consumer issues, and (f) community involvement and development.",
-    "Captures the depth and breadth of sustainability risk analysis in procurement decisions.")
-q_num += 1
+    "Describe how risks and opportunities were evaluated per ISO 20400 Clause 4.3: human rights, labour, environment, fair practices, consumer issues, community.",
+    "Depth of sustainability risk analysis in procurement.")
+q += 1
 
-row = add_question(ws5, row, f"{ref_base}.{q_num}", "Responsible Procurement", "Credit Achievement",
+row = add_question(ws5, row, f"{ref_base}.{q}", "Responsible Procurement", "Credit Achievement",
     "Risk and Opportunity Assessment", "Data",
-    "For each of the 10+ key items, summarise the top-priority risks and opportunities identified and the risk rating assigned (e.g. high, medium, low) for each ISO 20400 issue area.",
-    "Enables aggregated analysis of supply chain risk profiles to inform industry guidance.")
-q_num += 1
+    "For each key item, summarise priority risks/opportunities and risk ratings (high/medium/low) per ISO 20400 issue area.",
+    "Aggregated supply chain risk profiles for industry guidance.")
+q += 1
 
-row = add_question(ws5, row, f"{ref_base}.{q_num}", "Responsible Procurement", "Credit Achievement",
+row = add_question(ws5, row, f"{ref_base}.{q}", "Responsible Procurement", "Credit Achievement",
     "Risk and Opportunity Assessment", "Descriptive",
-    "Explain the methodology or framework used to analyse and prioritise the risks and opportunities. Identify any tools, databases, or references used beyond ISO 20400:2017 Annex A.",
-    "Documents risk assessment methodologies for knowledge sharing across the industry.")
-q_num += 1
+    "Explain the methodology used to analyse and prioritise risks. Note any tools or references beyond ISO 20400 Annex A.",
+    "Risk assessment methodologies for industry knowledge sharing.")
+q += 1
 
-# Responsible Procurement Plan
+# ── Responsible Procurement Plan ──
 row = add_criteria_header(ws5, row, "Responsible Procurement Plan")
 
-row = add_question(ws5, row, f"{ref_base}.{q_num}", "Responsible Procurement", "Credit Achievement",
+row = add_question(ws5, row, f"{ref_base}.{q}", "Responsible Procurement", "Credit Achievement",
     "Responsible Procurement Plan", "Descriptive",
-    "Describe the project-level environmental, social, and economic objectives set in the responsible procurement plan to address the risks and implement the opportunities identified in the assessment.",
-    "Captures the range and ambition of procurement sustainability objectives across projects.")
-q_num += 1
+    "Outline the plan's environmental, social, and economic objectives addressing the identified risks and opportunities.",
+    "Procurement sustainability objective ambition across projects.")
+q += 1
 
-row = add_question(ws5, row, f"{ref_base}.{q_num}", "Responsible Procurement", "Credit Achievement",
+row = add_question(ws5, row, f"{ref_base}.{q}", "Responsible Procurement", "Credit Achievement",
     "Responsible Procurement Plan", "Descriptive",
-    "Explain the data collection, impact measurement, monitoring, and reporting requirements outlined in the plan, with reference to ISO 20400:2017 Clause 6.5. Describe what metrics are tracked and how frequently.",
-    "Documents procurement monitoring and reporting approaches for industry benchmarking.")
-q_num += 1
+    "Describe data collection, monitoring, and reporting requirements per ISO 20400 Clause 6.5. State metrics tracked and frequency.",
+    "Procurement monitoring and reporting approaches.")
+q += 1
 
-row = add_question(ws5, row, f"{ref_base}.{q_num}", "Responsible Procurement", "Credit Achievement",
+row = add_question(ws5, row, f"{ref_base}.{q}", "Responsible Procurement", "Credit Achievement",
     "Responsible Procurement Plan", "Descriptive",
-    "Describe the framework established for incentivising contractors and trades to achieve the plan's objectives. Provide examples of incentive mechanisms used.",
-    "Tracks effectiveness of supply chain incentive models for sustainability outcomes.")
-q_num += 1
+    "Describe the framework for incentivising contractors and trades. Provide examples of incentive mechanisms.",
+    "Supply chain incentive models for sustainability outcomes.")
+q += 1
 
-row = add_question(ws5, row, f"{ref_base}.{q_num}", "Responsible Procurement", "Credit Achievement",
+row = add_question(ws5, row, f"{ref_base}.{q}", "Responsible Procurement", "Credit Achievement",
     "Responsible Procurement Plan", "Descriptive",
-    "Explain how the responsible procurement plan was embedded in tender documentation for the head contractor and relevant trades. If the head contractor was engaged under a design and construct contract, describe how the plan was developed prior to procurement activities and embedded in subcontractor tenders.",
-    "Measures integration of sustainability requirements into standard procurement workflows.")
-q_num += 1
+    "Explain how the plan was embedded in tender documentation for the head contractor and relevant trades.",
+    "Integration of sustainability requirements into procurement workflows.")
+q += 1
 
-row = add_question(ws5, row, f"{ref_base}.{q_num}", "Responsible Procurement", "Credit Achievement",
+row = add_question(ws5, row, f"{ref_base}.{q}", "Responsible Procurement", "Credit Achievement",
     "Responsible Procurement Plan", "Condition (Y/N)",
-    "Was the head contractor engaged under a design and construct (D&C) contract? (Yes/No)",
-    "Tracks procurement models and their impact on sustainability integration.")
-q_num += 1
+    "Was the head contractor engaged under a design and construct (D&C) contract?",
+    "Procurement models and their impact on sustainability integration.")
+q += 1
 
-row = add_question(ws5, row, f"{ref_base}.{q_num}", "Responsible Procurement", "Credit Achievement",
+row = add_question(ws5, row, f"{ref_base}.{q}", "Responsible Procurement", "Credit Achievement",
     "Responsible Procurement Plan", "Descriptive",
-    "If a D&C contract was used, explain how the head contractor was involved in developing the responsible procurement plan and how the plan was embedded in subcontractor and trade tender documentation.",
+    "If D&C, explain the head contractor's role in developing the plan and how it was embedded in subcontractor tenders.",
     "")
-q_num += 1
+q += 1
 
-row = add_question(ws5, row, f"{ref_base}.{q_num}", "Responsible Procurement", "Credit Achievement",
+row = add_question(ws5, row, f"{ref_base}.{q}", "Responsible Procurement", "Credit Achievement",
     "Responsible Procurement Plan", "Descriptive",
-    "Describe how the plan was implemented during construction in partnership with relevant contractors and trades. Provide examples of data collection, monitoring, and reporting activities carried out, with reference to ISO 20400:2017 Clause 7.",
-    "Captures real-world implementation of sustainable procurement practices for effectiveness research.")
-q_num += 1
+    "Describe plan implementation during construction: data collection, monitoring, and reporting activities per ISO 20400 Clause 7.",
+    "Real-world sustainable procurement implementation effectiveness.")
+q += 1
 
-row = add_question(ws5, row, f"{ref_base}.{q_num}", "Responsible Procurement", "Credit Achievement",
+row = add_question(ws5, row, f"{ref_base}.{q}", "Responsible Procurement", "Credit Achievement",
     "Responsible Procurement Plan", "Data",
-    "List the key items for which responsible procurement actions were taken during construction. For each, summarise the sustainability outcome achieved (e.g. modern slavery risk mitigated, environmental impact reduced, local supply chain used).",
-    "Provides outcome-level data on responsible procurement effectiveness for advocacy and policy research.")
-q_num += 1
+    "List key items with procurement actions taken. Summarise the sustainability outcome per item (e.g. modern slavery risk mitigated, local supply used).",
+    "Outcome-level data on responsible procurement for advocacy/policy.")
+q += 1
 
-row = add_question(ws5, row, f"{ref_base}.{q_num}", "Responsible Procurement", "Credit Achievement",
+row = add_question(ws5, row, f"{ref_base}.{q}", "Responsible Procurement", "Credit Achievement",
     "Responsible Procurement Plan", "Data",
-    "Identify any supply chain risks that materialised during construction and the corrective actions taken. State the number of items where procurement plans were fully implemented versus partially implemented.",
-    "Tracks procurement plan implementation rates and real-world supply chain risk events.")
-q_num += 1
+    "Note any supply chain risks that materialised and corrective actions taken. State items fully vs partially implemented.",
+    "Procurement plan implementation rates and real-world risk events.")
+q += 1
+
+apply_dropdowns(ws5)
 
 
 # ════════════════════════════════════════════════════════════════════════════
