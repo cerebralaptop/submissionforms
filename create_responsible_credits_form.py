@@ -159,8 +159,14 @@ q += 1
 
 row = add_question(ws, row, f"{ref_base}.{q}", "Industry Development", "Credit Achievement",
     "Green Star Accredited Professional", "Descriptive",
-    "State the date and project phase when the GSAP was first engaged. Confirm engagement was within one month of registration.",
+    "State the date and project phase when the GSAP was first engaged.",
     "Timing of sustainability expertise integration relative to design stage.")
+q += 1
+
+row = add_question(ws, row, f"{ref_base}.{q}", "Industry Development", "Credit Achievement",
+    "Green Star Accredited Professional", "Condition (Y/N)",
+    "Was the GSAP engaged within one month of project registration?",
+    "")
 q += 1
 
 row = add_question(ws, row, f"{ref_base}.{q}", "Industry Development", "Credit Achievement",
@@ -182,8 +188,14 @@ row = add_question(ws, row, f"{ref_base}.{q}", "Industry Development", "Credit A
 q += 1
 
 row = add_question(ws, row, f"{ref_base}.{q}", "Industry Development", "Credit Achievement",
+    "Green Star Accredited Professional", "Condition (Y/N)",
+    "Is the GSAP nominated as the Project Contact for GBCA communications?",
+    "")
+q += 1
+
+row = add_question(ws, row, f"{ref_base}.{q}", "Industry Development", "Credit Achievement",
     "Green Star Accredited Professional", "Descriptive",
-    "Confirm the GSAP is the nominated Project Contact. Describe how ongoing involvement was maintained (e.g. design meetings, workshops).",
+    "Describe how ongoing GSAP involvement was maintained throughout the project (e.g. design meetings, workshops).",
     "")
 q += 1
 
@@ -191,9 +203,15 @@ q += 1
 row = add_criteria_header(ws, row, "Financial Transparency")
 
 row = add_question(ws, row, f"{ref_base}.{q}", "Industry Development", "Credit Achievement",
-    "Financial Transparency", "Descriptive",
-    "Confirm the Financial Transparency template was completed (latest version, Excel format). Identify who prepared the cost data.",
+    "Financial Transparency", "Condition (Y/N)",
+    "Was the Financial Transparency template completed in its latest version and submitted in Excel format?",
     "Industry-wide benchmarking of sustainable building costs.")
+q += 1
+
+row = add_question(ws, row, f"{ref_base}.{q}", "Industry Development", "Credit Achievement",
+    "Financial Transparency", "Descriptive",
+    "Identify who prepared the cost data (e.g. quantity surveyor, head contractor, cost consultant).",
+    "")
 q += 1
 
 row = add_question(ws, row, f"{ref_base}.{q}", "Industry Development", "Credit Achievement",
@@ -293,9 +311,15 @@ row = add_question(ws2, row, f"{ref_base}.{q}", "Responsible Construction", "Min
 q += 1
 
 row = add_question(ws2, row, f"{ref_base}.{q}", "Responsible Construction", "Minimum Expectation",
-    "Environmental Management Plan", "Descriptive",
-    "Confirm the EMP covered the full duration of all site works. State start and end dates.",
+    "Environmental Management Plan", "Condition (Y/N)",
+    "Did the EMP cover the full duration of all site works?",
     "Construction duration and environmental management coverage.")
+q += 1
+
+row = add_question(ws2, row, f"{ref_base}.{q}", "Responsible Construction", "Minimum Expectation",
+    "Environmental Management Plan", "Data",
+    "State the EMP start and end dates.",
+    "")
 q += 1
 
 row = add_question(ws2, row, f"{ref_base}.{q}", "Responsible Construction", "Minimum Expectation",
@@ -315,8 +339,14 @@ row = add_criteria_header(ws2, row, "Construction and Demolition Waste Diversion
 
 row = add_question(ws2, row, f"{ref_base}.{q}", "Responsible Construction", "Minimum Expectation",
     "Construction and Demolition Waste Diversion", "Data",
-    "State total site waste (tonnes), total diverted from landfill (tonnes), and diversion rate (%). Confirm it meets the 80% threshold.",
+    "State total site waste (tonnes), total diverted from landfill (tonnes), and diversion rate (%).",
     "Construction waste diversion rate benchmarking.")
+q += 1
+
+row = add_question(ws2, row, f"{ref_base}.{q}", "Responsible Construction", "Minimum Expectation",
+    "Construction and Demolition Waste Diversion", "Condition (Y/N)",
+    "Does the diversion rate meet the 80% threshold?",
+    "")
 q += 1
 
 row = add_question(ws2, row, f"{ref_base}.{q}", "Responsible Construction", "Minimum Expectation",
@@ -342,8 +372,14 @@ row = add_criteria_header(ws2, row, "Sustainability Training")
 
 row = add_question(ws2, row, f"{ref_base}.{q}", "Responsible Construction", "Minimum Expectation",
     "Sustainability Training", "Data",
-    "State total site workers on site 3+ days, number trained, and percentage. Confirm it meets the 95% threshold.",
+    "State total site workers on site 3+ days, number trained, and resulting percentage.",
     "Sustainability education reach in the construction workforce.")
+q += 1
+
+row = add_question(ws2, row, f"{ref_base}.{q}", "Responsible Construction", "Minimum Expectation",
+    "Sustainability Training", "Condition (Y/N)",
+    "Does the training rate meet the 95% threshold?",
+    "")
 q += 1
 
 row = add_question(ws2, row, f"{ref_base}.{q}", "Responsible Construction", "Minimum Expectation",
@@ -364,8 +400,14 @@ row = add_criteria_header(ws2, row, "Increased Construction and Demolition Waste
 
 row = add_question(ws2, row, f"{ref_base}.{q}", "Responsible Construction", "Credit Achievement",
     "Increased C&D Waste Diversion", "Data",
-    "State total site waste (tonnes), total diverted (tonnes), and diversion rate (%). Confirm it meets the 90% threshold.",
+    "State total site waste (tonnes), total diverted (tonnes), and diversion rate (%).",
     "Higher-tier waste diversion benchmarking.")
+q += 1
+
+row = add_question(ws2, row, f"{ref_base}.{q}", "Responsible Construction", "Credit Achievement",
+    "Increased C&D Waste Diversion", "Condition (Y/N)",
+    "Does the diversion rate meet the 90% threshold?",
+    "")
 q += 1
 
 row = add_question(ws2, row, f"{ref_base}.{q}", "Responsible Construction", "Credit Achievement",
@@ -457,8 +499,14 @@ row = add_criteria_header(ws3, row, "Commissioning and Tuning")
 
 row = add_question(ws3, row, f"{ref_base}.{q}", "Verification and Handover", "Minimum Expectation",
     "Commissioning and Tuning", "Descriptive",
-    "Summarise environmental performance targets (energy, water, IEQ, airtightness) set prior to schematic design. Confirm owner sign-off on the design intent report or OPR.",
+    "Summarise environmental performance targets (energy, water, IEQ, airtightness) set prior to schematic design.",
     "Target-setting practices driving building performance outcomes.")
+q += 1
+
+row = add_question(ws3, row, f"{ref_base}.{q}", "Verification and Handover", "Minimum Expectation",
+    "Commissioning and Tuning", "Condition (Y/N)",
+    "Was the design intent report or OPR signed off by the building owner?",
+    "")
 q += 1
 
 row = add_question(ws3, row, f"{ref_base}.{q}", "Verification and Handover", "Minimum Expectation",
@@ -543,9 +591,15 @@ row = add_question(ws3, row, f"{ref_base}.{q}", "Verification and Handover", "Mi
 q += 1
 
 row = add_question(ws3, row, f"{ref_base}.{q}", "Verification and Handover", "Minimum Expectation",
-    "Building Information", "Descriptive",
-    "Confirm user information is in an editable digital format accessible to the FM team. State the format/platform.",
+    "Building Information", "Condition (Y/N)",
+    "Is the building user information in an editable digital format accessible to the FM team?",
     "Digital information management maturity in building operations.")
+q += 1
+
+row = add_question(ws3, row, f"{ref_base}.{q}", "Verification and Handover", "Minimum Expectation",
+    "Building Information", "Descriptive",
+    "State the format and platform used for building user information.",
+    "")
 q += 1
 
 # ── Credit Achievement ──
@@ -562,8 +616,14 @@ row = add_criteria_header(ws3, row, "Soft Landings Approach")
 
 row = add_question(ws3, row, f"{ref_base}.{q}", "Verification and Handover", "Credit Achievement",
     "Soft Landings Approach", "Descriptive",
-    "Describe implementation of CIBSE ANZ Soft Landings Stages 1-4. Confirm worksheets for Stages 1-3 are completed and Stage 4 actions identified.",
+    "Describe implementation of CIBSE ANZ Soft Landings Stages 1-4.",
     "Soft landings adoption and implementation quality.")
+q += 1
+
+row = add_question(ws3, row, f"{ref_base}.{q}", "Verification and Handover", "Credit Achievement",
+    "Soft Landings Approach", "Condition (Y/N)",
+    "Are the sample worksheets for Stages 1-3 completed and Stage 4 actions identified?",
+    "")
 q += 1
 
 row = add_question(ws3, row, f"{ref_base}.{q}", "Verification and Handover", "Credit Achievement",
@@ -750,9 +810,21 @@ row = add_level_header(ws5, row, "Credit Achievement (1 point)")
 row = add_criteria_header(ws5, row, "Risk and Opportunity Assessment")
 
 row = add_question(ws5, row, f"{ref_base}.{q}", "Responsible Procurement", "Credit Achievement",
+    "Risk and Opportunity Assessment", "Condition (Y/N)",
+    "Was the risk and opportunity assessment completed before appointment of the head contractor?",
+    "Timing of supply chain risk assessment relative to procurement.")
+q += 1
+
+row = add_question(ws5, row, f"{ref_base}.{q}", "Responsible Procurement", "Credit Achievement",
+    "Risk and Opportunity Assessment", "Condition (Y/N)",
+    "Did the building owner provide input into the assessment?",
+    "Stakeholder involvement in supply chain risk assessment.")
+q += 1
+
+row = add_question(ws5, row, f"{ref_base}.{q}", "Responsible Procurement", "Credit Achievement",
     "Risk and Opportunity Assessment", "Descriptive",
-    "Confirm the assessment was completed before head contractor appointment. Identify assessors and confirm building owner input.",
-    "Timing and stakeholder involvement in supply chain risk assessment.")
+    "Identify who conducted the assessment.",
+    "")
 q += 1
 
 row = add_question(ws5, row, f"{ref_base}.{q}", "Responsible Procurement", "Credit Achievement",
