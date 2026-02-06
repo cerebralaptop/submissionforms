@@ -326,9 +326,10 @@ for cat_name, cat_sheets in CATEGORIES.items():
         credit_id = f"credit-{credit_index}"
         q_count = len(credit["questions"])
         sidebar_html += f'''
-        <div class="sidebar-item" data-credit="{credit_id}" onclick="showCredit('{credit_id}')">
-          <span class="sidebar-item-name">{esc(credit["sheet_name"])}</span>
-          <span class="sidebar-badge">{q_count}</span>
+        <div class="sidebar-item" data-credit="{credit_id}" id="sidebar-{credit_id}">
+          <span class="sidebar-item-name" onclick="showCredit('{credit_id}')">{esc(credit["sheet_name"])}</span>
+          <span class="sidebar-progress-ring" id="ring-{credit_id}"><svg width="18" height="18" viewBox="0 0 18 18"><circle cx="9" cy="9" r="7" fill="none" stroke="#e0e0e0" stroke-width="2"/><circle cx="9" cy="9" r="7" fill="none" stroke="{colors['bg']}" stroke-width="2" stroke-dasharray="44" stroke-dashoffset="44" stroke-linecap="round" transform="rotate(-90 9 9)" class="ring-fill"/></svg></span>
+          <button class="na-toggle" onclick="toggleNA('{credit_id}', event)" title="Mark as Not Applicable">N/A</button>
         </div>'''
 
         # Build credit page
@@ -338,7 +339,10 @@ for cat_name, cat_sheets in CATEGORIES.items():
       <div class="credit-header" style="background:{colors['bg']}">
         <div class="credit-header-top">
           <span class="credit-category-tag" style="background:{colors['mid']};color:{colors['bg']}">{esc(cat_name)}</span>
-          <span class="credit-count">{q_count} questions</span>
+          <div class="credit-header-right">
+            <button class="wizard-toggle" onclick="toggleWizard('{credit_id}')" title="Step-by-step mode">Step-by-step</button>
+            <button class="na-btn-header" onclick="toggleNA('{credit_id}', event)">Mark N/A</button>
+          </div>
         </div>
         <h2>{esc(title)}</h2>
       </div>
@@ -348,7 +352,17 @@ for cat_name, cat_sheets in CATEGORIES.items():
       <div class="credit-progress-text">
         <span id="{credit_id}-progress-text">0 of {q_count} answered</span>
       </div>
-      <div class="credit-body">'''
+      <div class="wizard-nav" id="{credit_id}-wizard-nav" style="display:none">
+        <button class="wizard-btn" onclick="wizardPrev('{credit_id}')">&#8592; Back</button>
+        <span class="wizard-step-text" id="{credit_id}-wizard-step">1 / {q_count}</span>
+        <button class="wizard-btn wizard-btn-next" onclick="wizardNext('{credit_id}')">Next &#8594;</button>
+      </div>
+      <div class="credit-body">
+        <div class="gaps-panel" id="{credit_id}-gaps">
+          <h3>Unanswered Questions</h3>
+          <div class="gaps-count" id="{credit_id}-gaps-count"></div>
+          <ul class="gaps-list" id="{credit_id}-gaps-list"></ul>
+        </div>'''
 
         for section in credit["sections"]:
             pages_html += f'''
@@ -389,9 +403,12 @@ for cat_name, cat_sheets in CATEGORIES.items():
                     data_note_html = ""
                     if q["data_note"]:
                         data_note_html = f'''
-              <div class="data-note">
-                <span class="data-note-icon">&#128269;</span>
-                <span class="data-note-label">Research Note:</span> {esc(q["data_note"])}
+              <div class="guidance-wrapper">
+                <button class="guidance-toggle" onclick="this.parentElement.classList.toggle('open')">
+                  <span class="guidance-icon">?</span> Guidance
+                  <span class="guidance-arrow">&#9662;</span>
+                </button>
+                <div class="guidance-content">{esc(q["data_note"])}</div>
               </div>'''
 
                     type_badge = q["type"]
@@ -965,13 +982,243 @@ body.review-mode .level-header.has-answers {{
   font-weight: 700 !important;
 }}
 
-/* Conditional hint on gateway questions */
-.q-gateway-hint {{
-  font-size: 11px;
+/* ── N/A toggle ── */
+.na-toggle {{
+  background: none;
+  border: 1px solid #ccc;
+  color: #999;
+  font-size: 9px;
+  padding: 1px 5px;
+  border-radius: 3px;
+  cursor: pointer;
+  flex-shrink: 0;
+  margin-left: 4px;
+  line-height: 1.3;
+  transition: all 0.15s;
+}}
+.na-toggle:hover {{ border-color: #C62828; color: #C62828; }}
+.sidebar-item.credit-na .na-toggle {{
+  background: #C62828;
+  color: white;
+  border-color: #C62828;
+}}
+.sidebar-item.credit-na .sidebar-item-name {{
+  text-decoration: line-through;
+  opacity: 0.4;
+}}
+.sidebar-item.credit-na .sidebar-progress-ring {{ opacity: 0.2; }}
+.credit-page.credit-na .credit-body {{ display: none; }}
+.credit-page.credit-na .credit-progress-bar {{ display: none; }}
+.credit-page.credit-na .credit-progress-text {{ display: none; }}
+.credit-page.credit-na .wizard-nav {{ display: none !important; }}
+.credit-page.credit-na::after {{
+  content: 'This credit has been marked as Not Applicable';
+  display: block;
+  text-align: center;
+  padding: 60px 20px;
   color: var(--text-light);
-  margin-top: 4px;
+  font-size: 16px;
   font-style: italic;
 }}
+.na-btn-header {{
+  background: rgba(255,255,255,0.15);
+  color: white;
+  border: 1px solid rgba(255,255,255,0.3);
+  padding: 4px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 11px;
+}}
+.na-btn-header:hover {{ background: rgba(255,255,255,0.3); }}
+.credit-page.credit-na .na-btn-header {{ background: rgba(255,255,255,0.3); }}
+.credit-header-right {{ display: flex; gap: 8px; align-items: center; }}
+
+/* ── Sidebar progress ring ── */
+.sidebar-progress-ring {{
+  flex-shrink: 0;
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+}}
+.sidebar-item-name {{ cursor: pointer; }}
+
+/* ── Expandable guidance ── */
+.guidance-wrapper {{ margin-top: 6px; }}
+.guidance-toggle {{
+  background: none;
+  border: none;
+  color: #F57F17;
+  font-size: 12px;
+  cursor: pointer;
+  padding: 4px 0;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-weight: 600;
+}}
+.guidance-toggle:hover {{ color: #E65100; }}
+.guidance-icon {{
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px; height: 16px;
+  border-radius: 50%;
+  background: #FFF8E1;
+  border: 1px solid #FFD54F;
+  font-size: 10px;
+  font-weight: 700;
+  color: #F57F17;
+}}
+.guidance-arrow {{ font-size: 9px; transition: transform 0.2s; }}
+.guidance-wrapper.open .guidance-arrow {{ transform: rotate(180deg); }}
+.guidance-content {{
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.25s ease, padding 0.25s ease;
+  font-size: 12px;
+  color: #666;
+  line-height: 1.5;
+  background: #FFFDE7;
+  border: 1px solid #FFF9C4;
+  border-radius: 4px;
+  padding: 0 10px;
+}}
+.guidance-wrapper.open .guidance-content {{ max-height: 200px; padding: 8px 10px; }}
+
+/* ── Wizard mode ── */
+.wizard-toggle {{
+  background: rgba(255,255,255,0.15);
+  color: white;
+  border: 1px solid rgba(255,255,255,0.3);
+  padding: 4px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 11px;
+}}
+.wizard-toggle:hover {{ background: rgba(255,255,255,0.3); }}
+.wizard-toggle.active {{ background: rgba(255,255,255,0.35); font-weight: 700; }}
+.wizard-nav {{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 32px;
+  background: var(--white);
+  border-bottom: 1px solid var(--border);
+}}
+.wizard-btn {{
+  background: var(--green-primary);
+  color: white;
+  border: none;
+  padding: 8px 20px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  transition: background 0.2s;
+}}
+.wizard-btn:hover {{ background: var(--green-mid); }}
+.wizard-btn:disabled {{ opacity: 0.3; cursor: default; }}
+.wizard-btn-next {{ background: var(--green-mid); }}
+.wizard-step-text {{ font-size: 13px; color: var(--text-light); font-weight: 600; }}
+
+body.wizard-active .credit-page:not(.wizard-target) .question-card {{ }}
+.wizard-target .question-card {{ display: none !important; }}
+.wizard-target .question-card.wizard-current {{ display: block !important; }}
+.wizard-target .question-card.wizard-current.q-hidden {{ display: none !important; }}
+.wizard-target .level-header,
+.wizard-target .criteria-header {{ display: none; }}
+
+/* ── Validation warnings ── */
+.q-unanswered-warn {{
+  border-color: #FFCC80 !important;
+}}
+.q-unanswered-warn .question-ref::after {{
+  content: ' (unanswered)';
+  color: #FF9800;
+  font-weight: 400;
+  font-family: inherit;
+}}
+.question-card {{ position: relative; }}
+
+/* Gaps summary panel in review mode */
+.gaps-panel {{
+  display: none;
+  background: #FFF3E0;
+  border: 1px solid #FFCC80;
+  border-radius: 8px;
+  padding: 20px;
+  margin-bottom: 20px;
+}}
+body.review-mode .gaps-panel {{ display: block; }}
+.gaps-panel h3 {{ font-size: 15px; color: #E65100; margin-bottom: 10px; }}
+.gaps-list {{ list-style: none; padding: 0; }}
+.gaps-list li {{
+  padding: 6px 0;
+  font-size: 13px;
+  color: var(--text);
+  border-bottom: 1px solid #FFE0B2;
+  cursor: pointer;
+}}
+.gaps-list li:hover {{ color: var(--green-primary); }}
+.gaps-list li:last-child {{ border-bottom: none; }}
+.gaps-list-ref {{
+  font-family: monospace;
+  font-weight: 600;
+  color: #E65100;
+  margin-right: 6px;
+}}
+.gaps-count {{ font-size: 13px; color: var(--text-light); margin-bottom: 10px; }}
+
+/* ── Version history ── */
+.history-overlay {{
+  display: none;
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.4);
+  z-index: 200;
+  justify-content: center;
+  align-items: center;
+}}
+.history-overlay.active {{ display: flex; }}
+.history-panel {{
+  background: white;
+  border-radius: 12px;
+  width: 600px;
+  max-width: 90vw;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+}}
+.history-header {{
+  padding: 20px 24px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}}
+.history-header h3 {{ font-size: 16px; }}
+.history-close {{ background: none; border: none; font-size: 20px; cursor: pointer; color: var(--text-light); }}
+.history-body {{ flex: 1; overflow-y: auto; padding: 16px 24px; }}
+.history-entry {{ padding: 12px 0; border-bottom: 1px solid var(--border); }}
+.history-entry:last-child {{ border-bottom: none; }}
+.history-time {{ font-size: 11px; color: var(--text-light); margin-bottom: 4px; }}
+.history-changes {{ font-size: 13px; }}
+.history-change {{ display: flex; gap: 6px; padding: 3px 0; }}
+.history-change-ref {{ font-family: monospace; font-weight: 600; color: var(--green-primary); min-width: 50px; }}
+.history-restore {{
+  background: var(--green-primary);
+  color: white;
+  border: none;
+  padding: 4px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 11px;
+  margin-top: 6px;
+}}
+.history-restore:hover {{ background: var(--green-mid); }}
+.history-empty {{ text-align: center; padding: 40px; color: var(--text-light); font-size: 14px; }}
+.autosave-indicator {{ font-size: 11px; opacity: 0.6; transition: opacity 0.3s; }}
+.autosave-indicator.saving {{ opacity: 1; }}
 
 /* ── Responsive ── */
 @media (max-width: 768px) {{
@@ -1024,8 +1271,10 @@ body.review-mode .level-header.has-answers {{
   <h1>Green Star Buildings v1.1</h1>
   <span class="subtitle">Submission Forms</span>
   <div class="header-actions">
+    <span class="autosave-indicator" id="autosave-indicator">Saved</span>
     <button class="header-btn" onclick="showDashboard()">Dashboard</button>
     <button class="header-btn" id="review-btn" onclick="toggleReview()">Review</button>
+    <button class="header-btn" onclick="showHistory()">History</button>
     <button class="header-btn" onclick="saveAllResponses()">Save</button>
     <button class="header-btn primary" onclick="showExportModal()">Export</button>
   </div>
@@ -1109,9 +1358,28 @@ body.review-mode .level-header.has-answers {{
 <!-- Hidden file input for import -->
 <input type="file" id="import-file" accept=".json" style="display:none" onchange="handleImport(event)">
 
+<!-- Version history modal -->
+<div class="history-overlay" id="history-overlay" onclick="if(event.target===this)closeHistory()">
+  <div class="history-panel">
+    <div class="history-header">
+      <h3>Version History</h3>
+      <button class="history-close" onclick="closeHistory()">&times;</button>
+    </div>
+    <div class="history-body" id="history-body">
+      <div class="history-empty">No history yet. Changes are tracked as you work.</div>
+    </div>
+  </div>
+</div>
+
 <script>
 // ── Conditional rules ──
 const CONDITIONAL_RULES = {conditional_rules_json};
+
+// ── State ──
+let wizardCredits = {{}};  // creditId -> {{ active: bool, step: int }}
+let naCredits = new Set();
+let versionHistory = [];
+let lastSnapshot = {{}};
 
 // ── Navigation ──
 function showCredit(id) {{
@@ -1123,9 +1391,10 @@ function showCredit(id) {{
     document.getElementById('main-content').scrollTop = 0;
   }}
   document.querySelectorAll('.sidebar-item').forEach(i => i.classList.remove('active'));
-  const item = document.querySelector(`.sidebar-item[data-credit="${{id}}"]`);
+  const item = document.querySelector(`#sidebar-${{id}}`);
   if (item) item.classList.add('active');
   document.getElementById('sidebar').classList.remove('open');
+  if (wizardCredits[id] && wizardCredits[id].active) renderWizard(id);
 }}
 
 function showDashboard() {{
@@ -1141,6 +1410,39 @@ function showDashboard() {{
 function toggleCategory(el) {{ el.classList.toggle('collapsed'); }}
 function toggleSidebar() {{ document.getElementById('sidebar').classList.toggle('open'); }}
 
+// ── N/A toggle ──
+function toggleNA(creditId, event) {{
+  event.stopPropagation();
+  const page = document.getElementById(creditId);
+  const sidebar = document.getElementById('sidebar-' + creditId);
+  if (!page) return;
+  const isNA = page.classList.toggle('credit-na');
+  if (sidebar) sidebar.classList.toggle('credit-na', isNA);
+  if (isNA) {{ naCredits.add(creditId); }} else {{ naCredits.delete(creditId); }}
+  saveNAState();
+  updateDashboard();
+  updateAllProgress();
+}}
+
+function saveNAState() {{
+  localStorage.setItem('greenstar_na_credits', JSON.stringify([...naCredits]));
+}}
+
+function loadNAState() {{
+  try {{
+    const raw = localStorage.getItem('greenstar_na_credits');
+    if (!raw) return;
+    const arr = JSON.parse(raw);
+    arr.forEach(id => {{
+      naCredits.add(id);
+      const page = document.getElementById(id);
+      const sidebar = document.getElementById('sidebar-' + id);
+      if (page) page.classList.add('credit-na');
+      if (sidebar) sidebar.classList.add('credit-na');
+    }});
+  }} catch(e) {{}}
+}}
+
 // ── Conditional visibility engine ──
 function applyConditionalRules() {{
   for (const [inputId, rule] of Object.entries(CONDITIONAL_RULES)) {{
@@ -1150,7 +1452,6 @@ function applyConditionalRules() {{
     if (!gateway) continue;
     const gatewayVal = gateway.value;
     const shouldShow = gatewayVal === rule.show_when;
-
     if (shouldShow) {{
       if (card.classList.contains('q-hidden')) {{
         card.classList.remove('q-hidden');
@@ -1159,11 +1460,6 @@ function applyConditionalRules() {{
     }} else {{
       card.classList.add('q-hidden');
       card.classList.remove('q-revealed');
-      // Clear the answer when hiding (so hidden answers don't count)
-      const input = card.querySelector('select, textarea');
-      if (input && gatewayVal && gatewayVal !== rule.show_when) {{
-        // Only clear if the gateway has been explicitly answered to the opposite value
-      }}
     }}
   }}
 }}
@@ -1172,15 +1468,25 @@ function applyConditionalRules() {{
 function onAnswer(creditId) {{
   applyConditionalRules();
   updateProgress(creditId);
-  // Auto-save
+  updateSidebarRing(creditId);
+  // Update autosave indicator
+  const indicator = document.getElementById('autosave-indicator');
+  indicator.textContent = 'Unsaved';
+  indicator.classList.add('saving');
   clearTimeout(window._saveTimer);
-  window._saveTimer = setTimeout(saveAllResponses, 2000);
+  window._saveTimer = setTimeout(() => {{
+    saveAllResponses();
+    indicator.textContent = 'Saved';
+    indicator.classList.remove('saving');
+  }}, 2000);
+  // Update wizard if active
+  if (wizardCredits[creditId] && wizardCredits[creditId].active) renderWizard(creditId);
 }}
 
-// ── Progress tracking (only counts visible questions) ──
+// ── Progress tracking (only counts visible, non-N/A questions) ──
 function updateProgress(creditId) {{
   const page = document.getElementById(creditId);
-  if (!page) return;
+  if (!page || page.classList.contains('credit-na')) return;
   const cards = page.querySelectorAll('.question-card');
   let visible = 0, answered = 0;
   cards.forEach(card => {{
@@ -1192,6 +1498,7 @@ function updateProgress(creditId) {{
     if (val) {{
       answered++;
       card.classList.add('q-answered');
+      card.classList.remove('q-unanswered-warn');
     }} else {{
       card.classList.remove('q-answered');
     }}
@@ -1203,13 +1510,38 @@ function updateProgress(creditId) {{
   if (text) text.textContent = `${{answered}} of ${{visible}} answered`;
 }}
 
+function updateSidebarRing(creditId) {{
+  const page = document.getElementById(creditId);
+  if (!page) return;
+  const cards = page.querySelectorAll('.question-card');
+  let visible = 0, answered = 0;
+  cards.forEach(card => {{
+    if (card.classList.contains('q-hidden')) return;
+    visible++;
+    const input = card.querySelector('select, textarea');
+    if (!input) return;
+    const val = input.tagName === 'SELECT' ? input.value : input.value.trim();
+    if (val) answered++;
+  }});
+  const pct = visible > 0 ? answered / visible : 0;
+  const ring = document.querySelector(`#ring-${{creditId}} .ring-fill`);
+  if (ring) {{
+    const circumference = 44;
+    ring.style.strokeDashoffset = circumference * (1 - pct);
+  }}
+}}
+
 function updateAllProgress() {{
-  document.querySelectorAll('.credit-page').forEach(page => updateProgress(page.id));
+  document.querySelectorAll('.credit-page').forEach(page => {{
+    updateProgress(page.id);
+    updateSidebarRing(page.id);
+  }});
 }}
 
 function updateDashboard() {{
   let totalVisible = 0, totalAnswered = 0;
   document.querySelectorAll('.credit-page').forEach(page => {{
+    if (page.classList.contains('credit-na')) return;
     page.querySelectorAll('.question-card').forEach(card => {{
       if (card.classList.contains('q-hidden')) return;
       totalVisible++;
@@ -1223,7 +1555,6 @@ function updateDashboard() {{
   document.getElementById('dash-answered').textContent = totalAnswered;
   document.getElementById('dash-pct').textContent = (totalVisible > 0 ? Math.round((totalAnswered / totalVisible) * 100) : 0) + '%';
 
-  // Per-category
   const catMap = {json.dumps({cat: [c["sheet_name"] for c in all_credits if c["category"] == cat] for cat in CATEGORIES})};
   const creditMap = {json.dumps({c["sheet_name"]: {"id": f"credit-{i}", "count": len(c["questions"])} for i, c in enumerate(all_credits)})};
 
@@ -1233,7 +1564,7 @@ function updateDashboard() {{
       const info = creditMap[s];
       if (!info) return;
       const page = document.getElementById(info.id);
-      if (!page) return;
+      if (!page || page.classList.contains('credit-na')) return;
       page.querySelectorAll('.question-card').forEach(card => {{
         if (card.classList.contains('q-hidden')) return;
         catVisible++;
@@ -1251,7 +1582,67 @@ function updateDashboard() {{
   }}
 }}
 
-// ── Review mode ──
+// ── Wizard mode ──
+function toggleWizard(creditId) {{
+  if (!wizardCredits[creditId]) wizardCredits[creditId] = {{ active: false, step: 0 }};
+  wizardCredits[creditId].active = !wizardCredits[creditId].active;
+  wizardCredits[creditId].step = 0;
+  const page = document.getElementById(creditId);
+  const nav = document.getElementById(creditId + '-wizard-nav');
+  const btn = page.querySelector('.wizard-toggle');
+  if (wizardCredits[creditId].active) {{
+    page.classList.add('wizard-target');
+    nav.style.display = 'flex';
+    btn.classList.add('active');
+    btn.textContent = 'Show all';
+    renderWizard(creditId);
+  }} else {{
+    page.classList.remove('wizard-target');
+    nav.style.display = 'none';
+    btn.classList.remove('active');
+    btn.textContent = 'Step-by-step';
+    page.querySelectorAll('.question-card').forEach(c => c.classList.remove('wizard-current'));
+  }}
+}}
+
+function getVisibleCards(creditId) {{
+  const page = document.getElementById(creditId);
+  if (!page) return [];
+  return Array.from(page.querySelectorAll('.question-card')).filter(
+    c => !c.classList.contains('q-hidden')
+  );
+}}
+
+function renderWizard(creditId) {{
+  const wiz = wizardCredits[creditId];
+  if (!wiz || !wiz.active) return;
+  const cards = getVisibleCards(creditId);
+  if (cards.length === 0) return;
+  if (wiz.step >= cards.length) wiz.step = cards.length - 1;
+  if (wiz.step < 0) wiz.step = 0;
+  const page = document.getElementById(creditId);
+  page.querySelectorAll('.question-card').forEach(c => c.classList.remove('wizard-current'));
+  cards[wiz.step].classList.add('wizard-current');
+  const stepText = document.getElementById(creditId + '-wizard-step');
+  if (stepText) stepText.textContent = `${{wiz.step + 1}} / ${{cards.length}}`;
+  // Scroll card into view
+  document.getElementById('main-content').scrollTop = 0;
+}}
+
+function wizardNext(creditId) {{
+  const wiz = wizardCredits[creditId];
+  if (!wiz) return;
+  const cards = getVisibleCards(creditId);
+  if (wiz.step < cards.length - 1) {{ wiz.step++; renderWizard(creditId); }}
+}}
+
+function wizardPrev(creditId) {{
+  const wiz = wizardCredits[creditId];
+  if (!wiz) return;
+  if (wiz.step > 0) {{ wiz.step--; renderWizard(creditId); }}
+}}
+
+// ── Review mode with validation ──
 let reviewMode = false;
 function toggleReview() {{
   reviewMode = !reviewMode;
@@ -1259,21 +1650,55 @@ function toggleReview() {{
   document.getElementById('review-btn').classList.toggle('review-active', reviewMode);
 
   if (reviewMode) {{
-    // Mark which criteria/level headers have answered questions beneath them
     document.querySelectorAll('.credit-page').forEach(page => {{
-      // Walk through all children of credit-body to find headers and check following cards
+      if (page.classList.contains('credit-na')) return;
       const body = page.querySelector('.credit-body');
       if (!body) return;
+
+      // Build gaps list
+      const gapsList = document.getElementById(page.id + '-gaps-list');
+      const gapsCount = document.getElementById(page.id + '-gaps-count');
+      if (!gapsList) return;
+      gapsList.innerHTML = '';
+      let gaps = 0;
+
+      // Mark unanswered visible questions
+      page.querySelectorAll('.question-card').forEach(card => {{
+        if (card.classList.contains('q-hidden')) return;
+        const input = card.querySelector('select, textarea');
+        if (!input) return;
+        const val = input.tagName === 'SELECT' ? input.value : input.value.trim();
+        if (!val) {{
+          card.classList.add('q-unanswered-warn');
+          gaps++;
+          const ref = card.querySelector('.question-ref');
+          const qtext = card.querySelector('.question-text');
+          const li = document.createElement('li');
+          li.innerHTML = `<span class="gaps-list-ref">${{ref ? ref.textContent : ''}}</span>${{qtext ? qtext.textContent.substring(0, 80) + '...' : ''}}`;
+          li.onclick = function() {{
+            toggleReview();
+            card.scrollIntoView({{ behavior: 'smooth', block: 'center' }});
+          }};
+          gapsList.appendChild(li);
+        }}
+      }});
+
+      if (gapsCount) gapsCount.textContent = gaps > 0 ? `${{gaps}} question${{gaps > 1 ? 's' : ''}} still need${{gaps > 1 ? '' : 's'}} a response` : 'All questions answered!';
+
+      // Mark headers with answers
       let currentHeaders = [];
       Array.from(body.children).forEach(el => {{
         if (el.classList.contains('level-header') || el.classList.contains('criteria-header')) {{
           el.classList.remove('has-answers');
           currentHeaders.push(el);
-        }} else if (el.classList.contains('question-card') && el.classList.contains('q-answered')) {{
+        }} else if (el.classList.contains('question-card') && (el.classList.contains('q-answered') || el.classList.contains('q-unanswered-warn'))) {{
           currentHeaders.forEach(h => h.classList.add('has-answers'));
         }}
       }});
     }});
+  }} else {{
+    // Clear warning highlights
+    document.querySelectorAll('.q-unanswered-warn').forEach(c => c.classList.remove('q-unanswered-warn'));
   }}
 }}
 
@@ -1281,13 +1706,15 @@ function toggleReview() {{
 function saveAllResponses() {{
   const data = {{}};
   document.querySelectorAll('[data-credit]').forEach(el => {{
-    if (el.id) {{
-      data[el.id] = el.tagName === 'SELECT' ? el.value : el.value;
-    }}
+    if (el.id) data[el.id] = el.tagName === 'SELECT' ? el.value : el.value;
   }});
   try {{
+    // Track version history (diff against last snapshot)
+    recordHistory(data);
     localStorage.setItem('greenstar_responses', JSON.stringify(data));
-    showToast();
+    const indicator = document.getElementById('autosave-indicator');
+    indicator.textContent = 'Saved';
+    indicator.classList.remove('saving');
   }} catch(e) {{
     console.error('Save failed', e);
   }}
@@ -1302,18 +1729,114 @@ function loadResponses() {{
       const el = document.getElementById(id);
       if (el) el.value = val;
     }}
+    lastSnapshot = {{ ...data }};
     applyConditionalRules();
     updateAllProgress();
     updateDashboard();
   }} catch(e) {{
     console.error('Load failed', e);
   }}
+  // Load version history
+  try {{
+    const h = localStorage.getItem('greenstar_history');
+    if (h) versionHistory = JSON.parse(h);
+  }} catch(e) {{}}
 }}
 
 function showToast() {{
   const t = document.getElementById('save-toast');
   t.classList.add('show');
   setTimeout(() => t.classList.remove('show'), 2000);
+}}
+
+// ── Version history ──
+function recordHistory(newData) {{
+  const changes = [];
+  const allKeys = new Set([...Object.keys(lastSnapshot), ...Object.keys(newData)]);
+  allKeys.forEach(key => {{
+    const oldVal = lastSnapshot[key] || '';
+    const newVal = newData[key] || '';
+    if (oldVal !== newVal) {{
+      // Extract ref from id like "credit-0-ID-1"
+      const parts = key.split('-');
+      const ref = parts.length >= 3 ? parts.slice(2).join('.') : key;
+      changes.push({{ id: key, ref: ref, from: oldVal, to: newVal }});
+    }}
+  }});
+  if (changes.length > 0) {{
+    versionHistory.push({{
+      time: new Date().toISOString(),
+      changes: changes,
+      snapshot: {{ ...newData }}
+    }});
+    // Keep last 50 entries
+    if (versionHistory.length > 50) versionHistory = versionHistory.slice(-50);
+    try {{
+      localStorage.setItem('greenstar_history', JSON.stringify(versionHistory));
+    }} catch(e) {{}}
+  }}
+  lastSnapshot = {{ ...newData }};
+}}
+
+function showHistory() {{
+  document.getElementById('history-overlay').classList.add('active');
+  renderHistory();
+}}
+
+function closeHistory() {{
+  document.getElementById('history-overlay').classList.remove('active');
+}}
+
+function renderHistory() {{
+  const body = document.getElementById('history-body');
+  if (versionHistory.length === 0) {{
+    body.innerHTML = '<div class="history-empty">No history yet. Changes are tracked as you work.</div>';
+    return;
+  }}
+  let html = '';
+  // Show newest first
+  for (let i = versionHistory.length - 1; i >= 0; i--) {{
+    const entry = versionHistory[i];
+    const d = new Date(entry.time);
+    const timeStr = d.toLocaleDateString() + ' ' + d.toLocaleTimeString();
+    html += `<div class="history-entry">`;
+    html += `<div class="history-time">${{timeStr}} — ${{entry.changes.length}} change${{entry.changes.length > 1 ? 's' : ''}}</div>`;
+    html += `<div class="history-changes">`;
+    entry.changes.slice(0, 5).forEach(ch => {{
+      const display = ch.to ? `"${{ch.to.substring(0, 60)}}${{ch.to.length > 60 ? '...' : ''}}"` : '<em>cleared</em>';
+      html += `<div class="history-change"><span class="history-change-ref">${{ch.ref}}</span><span class="history-change-val">${{display}}</span></div>`;
+    }});
+    if (entry.changes.length > 5) html += `<div style="font-size:11px;color:#999">+ ${{entry.changes.length - 5}} more</div>`;
+    html += `</div>`;
+    html += `<button class="history-restore" onclick="restoreVersion(${{i}})">Restore this version</button>`;
+    html += `</div>`;
+  }}
+  body.innerHTML = html;
+}}
+
+function restoreVersion(idx) {{
+  if (idx < 0 || idx >= versionHistory.length) return;
+  if (!confirm('Restore all responses to this point? Current answers will be saved in history first.')) return;
+  // Save current state before restoring
+  saveAllResponses();
+  const snapshot = versionHistory[idx].snapshot;
+  // Clear all inputs first
+  document.querySelectorAll('[data-credit]').forEach(el => {{
+    if (el.tagName === 'SELECT') el.value = '';
+    else el.value = '';
+  }});
+  // Apply snapshot
+  for (const [id, val] of Object.entries(snapshot)) {{
+    const el = document.getElementById(id);
+    if (el) el.value = val;
+  }}
+  localStorage.setItem('greenstar_responses', JSON.stringify(snapshot));
+  lastSnapshot = {{ ...snapshot }};
+  applyConditionalRules();
+  updateAllProgress();
+  updateDashboard();
+  closeHistory();
+  showToast();
 }}
 
 // ── Export / Import ──
@@ -1499,6 +2022,7 @@ document.addEventListener('keydown', function(e) {{
 
 // ── Init ──
 window.addEventListener('DOMContentLoaded', function() {{
+  loadNAState();
   loadResponses();
   applyConditionalRules();
   updateAllProgress();
