@@ -135,6 +135,42 @@ def find_category(sheet_name):
 for c in all_credits:
     c["category"] = find_category(c["sheet_name"])
 
+# Build JSON-serializable credit structure for the Excel exporter
+credits_json_data = []
+for i, c in enumerate(all_credits):
+    credits_json_data.append({
+        "id": f"credit-{i}",
+        "sheet_name": c["sheet_name"],
+        "title": c.get("title", c["sheet_name"]),
+        "category": c["category"],
+        "sections": [
+            {
+                "title": sec["title"],
+                "criteria": [
+                    {
+                        "name": cr["name"],
+                        "questions": [
+                            {
+                                "ref": q["ref"],
+                                "credit": q["credit"],
+                                "level": q["level"],
+                                "criteria": q["criteria"],
+                                "type": q["type"],
+                                "question": q["question"],
+                                "data_note": q["data_note"],
+                                "input_id": f"credit-{i}-{q['ref'].replace('.', '-')}",
+                            }
+                            for q in cr["questions"]
+                        ],
+                    }
+                    for cr in sec["criteria"]
+                ],
+            }
+            for sec in c["sections"]
+        ],
+    })
+credits_json_str = json.dumps(credits_json_data)
+
 # ── Generate HTML ────────────────────────────────────────────────────────────
 def esc(s):
     return html_mod.escape(str(s)) if s else ""
@@ -750,6 +786,28 @@ body {{
 }}
 .modal-btn.primary:hover {{ background: var(--green-mid); }}
 
+.export-options {{
+  display: flex;
+  gap: 12px;
+  margin-bottom: 20px;
+}}
+.export-option {{
+  flex: 1;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px;
+  cursor: pointer;
+  text-align: center;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}}
+.export-option:hover {{
+  border-color: var(--green-primary);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+}}
+.export-option-icon {{ font-size: 28px; margin-bottom: 8px; }}
+.export-option-label {{ font-weight: 600; font-size: 14px; margin-bottom: 4px; }}
+.export-option-desc {{ font-size: 11px; color: var(--text-light); line-height: 1.4; }}
+
 /* ── Responsive ── */
 @media (max-width: 768px) {{
   .menu-toggle {{ display: block; }}
@@ -791,6 +849,7 @@ body {{
 }}
 .save-toast.show {{ transform: translateY(0); opacity: 1; }}
 </style>
+<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
 </head>
 <body>
 
@@ -854,10 +913,25 @@ body {{
 <div class="modal-overlay" id="export-modal">
   <div class="modal">
     <h3>Export Responses</h3>
-    <p>Download all your responses as a JSON file. You can later import this file to restore your progress.</p>
+    <p>Download your responses in your preferred format. Excel includes full formatting matching the original spreadsheet.</p>
+    <div class="export-options">
+      <div class="export-option" onclick="exportExcel()">
+        <div class="export-option-icon" style="color:#217346">&#128196;</div>
+        <div class="export-option-label">Excel (.xlsx)</div>
+        <div class="export-option-desc">Formatted spreadsheet with colored headers, dropdowns, and all responses</div>
+      </div>
+      <div class="export-option" onclick="exportResponses()">
+        <div class="export-option-icon" style="color:#F57F17">&#123; &#125;</div>
+        <div class="export-option-label">JSON</div>
+        <div class="export-option-desc">Raw data file for backup and re-import</div>
+      </div>
+      <div class="export-option" onclick="importResponses()">
+        <div class="export-option-icon" style="color:#1565C0">&#128229;</div>
+        <div class="export-option-label">Import JSON</div>
+        <div class="export-option-desc">Restore a previous session from exported JSON</div>
+      </div>
+    </div>
     <div class="modal-actions">
-      <button class="modal-btn" onclick="importResponses()">Import</button>
-      <button class="modal-btn primary" onclick="exportResponses()">Export JSON</button>
       <button class="modal-btn" onclick="closeExportModal()">Cancel</button>
     </div>
   </div>
@@ -1013,6 +1087,8 @@ function showToast() {{
 }}
 
 // ── Export / Import ──
+const CREDITS_DATA = {credits_json_str};
+
 function showExportModal() {{
   document.getElementById('export-modal').classList.add('active');
 }}
@@ -1030,6 +1106,129 @@ function exportResponses() {{
   a.href = URL.createObjectURL(blob);
   a.download = 'greenstar_v1.1_responses.json';
   a.click();
+  closeExportModal();
+}}
+
+function exportExcel() {{
+  if (typeof XLSX === 'undefined') {{
+    alert('Excel library is still loading. Please try again in a moment.');
+    return;
+  }}
+  const wb = XLSX.utils.book_new();
+
+  // Style helpers - hex color without #
+  function hexFill(hex) {{ return {{ fgColor: {{ rgb: hex.replace('#','') }} }}; }}
+  function makeStyle(opts) {{
+    const s = {{}};
+    if (opts.fill) s.fill = {{ patternType: 'solid', ...hexFill(opts.fill) }};
+    if (opts.font) {{
+      s.font = {{ name: 'Calibri', ...opts.font }};
+      if (opts.font.color) s.font.color = {{ rgb: opts.font.color.replace('#','') }};
+    }}
+    if (opts.alignment) s.alignment = opts.alignment;
+    s.border = {{
+      top: {{ style: 'thin', color: {{ rgb: 'CCCCCC' }} }},
+      bottom: {{ style: 'thin', color: {{ rgb: 'CCCCCC' }} }},
+      left: {{ style: 'thin', color: {{ rgb: 'CCCCCC' }} }},
+      right: {{ style: 'thin', color: {{ rgb: 'CCCCCC' }} }},
+    }};
+    return s;
+  }}
+
+  const headerStyle = makeStyle({{ fill:'#0D3318', font:{{ bold:true, sz:14, color:'#FFFFFF' }}, alignment:{{ wrapText:true, vertical:'center', horizontal:'center' }} }});
+  const creditStyle = makeStyle({{ fill:'#1F4E28', font:{{ bold:true, sz:12, color:'#FFFFFF' }}, alignment:{{ wrapText:true }} }});
+  const levelStyle = makeStyle({{ fill:'#2E7D32', font:{{ bold:true, sz:11, color:'#FFFFFF' }}, alignment:{{ wrapText:true }} }});
+  const criteriaStyle = makeStyle({{ fill:'#C8E6C9', font:{{ bold:true, sz:11, color:'#1F4E28' }}, alignment:{{ wrapText:true }} }});
+  const questionStyle = makeStyle({{ fill:'#F1F8E9', font:{{ sz:10 }}, alignment:{{ wrapText:true, vertical:'top' }} }});
+  const conditionStyle = makeStyle({{ fill:'#EDE7F6', font:{{ bold:true, sz:10, color:'#7030A0' }}, alignment:{{ wrapText:true, vertical:'top' }} }});
+  const dataStyle = makeStyle({{ fill:'#E3F2FD', font:{{ sz:10, italic:true, color:'#2E75B6' }}, alignment:{{ wrapText:true, vertical:'top' }} }});
+  const responseStyle = makeStyle({{ fill:'#FFFFFF', font:{{ sz:10 }}, alignment:{{ wrapText:true, vertical:'top' }} }});
+
+  const headers = ['Ref','Credit','Performance Level','Criteria','Question Type','Question','Response','Data Collection / Research Notes'];
+  const colWidths = [8, 20, 22, 28, 16, 55, 50, 40];
+
+  CREDITS_DATA.forEach(credit => {{
+    const rows = [];
+    const styles = [];
+    const merges = [];
+
+    // Header row
+    rows.push(headers);
+    styles.push(headers.map(() => headerStyle));
+
+    // Credit title row
+    const creditRow = [credit.title, '', '', '', '', '', '', ''];
+    rows.push(creditRow);
+    styles.push(creditRow.map(() => creditStyle));
+    merges.push({{ s: {{ r: rows.length - 1, c: 0 }}, e: {{ r: rows.length - 1, c: 7 }} }});
+
+    credit.sections.forEach(section => {{
+      // Level header
+      const lvlRow = [section.title, '', '', '', '', '', '', ''];
+      rows.push(lvlRow);
+      styles.push(lvlRow.map(() => levelStyle));
+      merges.push({{ s: {{ r: rows.length - 1, c: 0 }}, e: {{ r: rows.length - 1, c: 7 }} }});
+
+      section.criteria.forEach(crit => {{
+        // Criteria header
+        const critRow = [crit.name, '', '', '', '', '', '', ''];
+        rows.push(critRow);
+        styles.push(critRow.map(() => criteriaStyle));
+        merges.push({{ s: {{ r: rows.length - 1, c: 0 }}, e: {{ r: rows.length - 1, c: 7 }} }});
+
+        crit.questions.forEach(q => {{
+          // Get response value from the form
+          const el = document.getElementById(q.input_id);
+          const response = el ? (el.tagName === 'SELECT' ? el.value : el.value) : '';
+
+          const isYN = q.type === 'Condition (Y/N)';
+          const isData = q.type === 'Data';
+          const qRow = [q.ref, q.credit, q.level, q.criteria, q.type, q.question, response, q.data_note];
+          rows.push(qRow);
+
+          const rowStyles = qRow.map((_, ci) => {{
+            if (ci === 6) return responseStyle;
+            if (ci === 7 && q.data_note) return dataStyle;
+            if (isYN) return conditionStyle;
+            return questionStyle;
+          }});
+          styles.push(rowStyles);
+        }});
+      }});
+    }});
+
+    // Create worksheet from array
+    const ws = XLSX.utils.aoa_to_sheet(rows);
+
+    // Apply column widths
+    ws['!cols'] = colWidths.map(w => ({{ wch: w }}));
+
+    // Apply merges
+    ws['!merges'] = merges;
+
+    // Apply styles (works with xlsx-style or pro; basic xlsx ignores but structure is there)
+    for (let r = 0; r < rows.length; r++) {{
+      for (let c = 0; c < rows[r].length; c++) {{
+        const addr = XLSX.utils.encode_cell({{ r, c }});
+        if (ws[addr]) {{
+          ws[addr].s = styles[r][c];
+        }}
+      }}
+    }}
+
+    // Apply row heights
+    ws['!rows'] = rows.map((_, r) => {{
+      if (r === 0) return {{ hpt: 35 }};
+      if (r === 1) return {{ hpt: 30 }};
+      return {{ hpt: 45 }};
+    }});
+
+    // Truncate sheet name to 31 chars (Excel limit)
+    const sheetName = credit.sheet_name.substring(0, 31);
+    XLSX.utils.book_append_sheet(wb, ws, sheetName);
+  }});
+
+  XLSX.writeFile(wb, 'Green_Star_Buildings_v1.1_Submission_Responses.xlsx');
   closeExportModal();
 }}
 
