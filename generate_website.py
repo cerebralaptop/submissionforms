@@ -171,6 +171,113 @@ for i, c in enumerate(all_credits):
     })
 credits_json_str = json.dumps(credits_json_data)
 
+# ── Conditional visibility rules ─────────────────────────────────────────────
+# Maps: question_input_id -> { "depends_on": gateway_input_id, "show_when": "Yes"|"No" }
+# Built from the analysis of all Y/N gateway -> follow-up patterns.
+#
+# We generate rules keyed by credit index + ref to match the input IDs
+# Format of input IDs: credit-{idx}-{ref with dots replaced by dashes}
+def make_id(credit_idx, ref):
+    return f"credit-{credit_idx}-{ref.replace('.', '-')}"
+
+conditional_rules = {}
+for ci, c in enumerate(all_credits):
+    sheet = c["sheet_name"]
+    qs = c["questions"]
+    refs = {q["ref"]: q for q in qs}
+    ref_list = [q["ref"] for q in qs]
+
+    # Build ref -> index for this credit
+    ref_idx = {r: i for i, r in enumerate(ref_list)}
+
+    # Define rules per credit based on analysis
+    # Explicit "If yes/no" follow-ups
+    rules_for_credit = []
+
+    # Helper: add rule(s) for gateway_ref -> [follow_ref1, ...] shown when answer is val
+    def add_rules(gateway, followers, val="Yes"):
+        for f in followers:
+            if gateway in ref_idx and f in ref_idx:
+                rules_for_credit.append((f, gateway, val))
+
+    sn = sheet.lower().replace(" ", "")
+
+    if "industrydevelopment" in sn:
+        add_rules("ID.5", ["ID.6"], "Yes")
+    elif "responsibleconstruction" in sn:
+        add_rules("RC.1", ["RC.3"], "Yes")
+        add_rules("RC.1", ["RC.2"], "No")
+        add_rules("RC.4", ["RC.5"], "Yes")
+    elif "verificationandhandover" in sn:
+        add_rules("VH.5", ["VH.6"], "Yes")
+        add_rules("VH.7", ["VH.8"], "Yes")
+        add_rules("VH.26", ["VH.27"], "Yes")
+    elif "responsibleresource" in sn:
+        add_rules("RRM.2", ["RRM.3"], "Yes")
+        add_rules("RRM.5", ["RRM.6"], "Yes")
+        add_rules("RRM.7", ["RRM.8"], "Yes")
+        add_rules("RRM.12", ["RRM.13"], "Yes")
+    elif "responsibleprocurement" in sn:
+        add_rules("RP.12", ["RP.13"], "Yes")
+    elif "cleanair" in sn:
+        add_rules("CA.9", ["CA.10"], "Yes")
+    elif "lightquality" in sn:
+        add_rules("LQ.7", ["LQ.8"], "Yes")
+        add_rules("LQ.7", ["LQ.9", "LQ.10", "LQ.11"], "No")
+    elif "exposuretotoxins" in sn:
+        add_rules("ET.1", ["ET.2", "ET.3"], "Yes")
+    elif "amenityandcomfort" in sn or "amenity" in sn:
+        add_rules("AmC.3", ["AmC.4"], "Yes")
+    elif "connectiontonature" in sn:
+        add_rules("CN.4", ["CN.5", "CN.6"], "Yes")
+    elif "climateresilience" in sn:
+        add_rules("CR.1", ["CR.2", "CR.3", "CR.4"], "Yes")
+    elif "operationsresilience" in sn:
+        add_rules("OR.4", ["OR.5"], "Yes")
+        add_rules("OR.6", ["OR.7"], "Yes")
+    elif "communityresilience" in sn:
+        add_rules("CoR.1", ["CoR.2", "CoR.3", "CoR.4"], "Yes")
+    elif "gridresilience" in sn:
+        add_rules("GR.1", ["GR.2", "GR.3"], "Yes")
+        add_rules("GR.4", ["GR.5", "GR.6"], "Yes")
+        add_rules("GR.7", ["GR.8"], "Yes")
+    elif "energysource" in sn:
+        add_rules("ES.5", ["ES.6"], "Yes")
+    elif "upfrontcarbonreduction" in sn:
+        add_rules("UCR.2", ["UCR.3", "UCR.4", "UCR.5"], "Yes")
+    elif "wateruse" in sn:
+        add_rules("WU.3", ["WU.4"], "Yes")
+        add_rules("WU.5", ["WU.6"], "Yes")
+    elif "contributiontoplace" in sn:
+        add_rules("CP.1", ["CP.2"], "Yes")
+    elif "cultureheritage" in sn:
+        add_rules("CHI.1", ["CHI.2"], "Yes")
+    elif "firstnations" in sn:
+        add_rules("FNI.1", ["FNI.2", "FNI.3"], "Yes")
+    elif "designforequity" in sn:
+        add_rules("DE.4", ["DE.5"], "Yes")
+    elif "impactstonature" in sn:
+        add_rules("IN.1", ["IN.2", "IN.3"], "Yes")
+        add_rules("IN.7", ["IN.8"], "Yes")
+    elif "natureconnectivity" in sn:
+        add_rules("NC.1", ["NC.2"], "Yes")
+        add_rules("NC.5", ["NC.6"], "Yes")
+    elif "naturestewardship" in sn:
+        add_rules("NS.1", ["NS.2", "NS.3"], "Yes")
+    elif "markettransformation" in sn:
+        add_rules("MT.4", ["MT.5"], "Yes")
+    elif "waterwayprotection" in sn:
+        add_rules("WP.5", ["WP.6"], "Yes")
+    elif "impactsdisclosure" in sn:
+        add_rules("ID2.5", ["ID2.6"], "Yes")
+
+    for follower_ref, gateway_ref, show_val in rules_for_credit:
+        fid = make_id(ci, follower_ref)
+        gid = make_id(ci, gateway_ref)
+        conditional_rules[fid] = {"depends_on": gid, "show_when": show_val}
+
+conditional_rules_json = json.dumps(conditional_rules)
+
 # ── Generate HTML ────────────────────────────────────────────────────────────
 def esc(s):
     return html_mod.escape(str(s)) if s else ""
@@ -260,7 +367,7 @@ for cat_name, cat_sheets in CATEGORIES.items():
                         type_class = "q-condition"
                         input_html = f'''
               <div class="response-field">
-                <select id="{q_id}" class="yn-select" onchange="updateProgress('{credit_id}', {q_count})" data-credit="{credit_id}">
+                <select id="{q_id}" class="yn-select" onchange="onAnswer('{credit_id}')" data-credit="{credit_id}">
                   <option value="">-- Select --</option>
                   <option value="Yes">Yes</option>
                   <option value="No">No</option>
@@ -270,13 +377,13 @@ for cat_name, cat_sheets in CATEGORIES.items():
                         type_class = "q-data"
                         input_html = f'''
               <div class="response-field">
-                <textarea id="{q_id}" class="data-input" rows="3" placeholder="Enter data..." oninput="updateProgress('{credit_id}', {q_count})" data-credit="{credit_id}"></textarea>
+                <textarea id="{q_id}" class="data-input" rows="3" placeholder="Enter data..." oninput="onAnswer('{credit_id}')" data-credit="{credit_id}"></textarea>
               </div>'''
                     else:
                         type_class = "q-descriptive"
                         input_html = f'''
               <div class="response-field">
-                <textarea id="{q_id}" class="desc-input" rows="4" placeholder="Describe..." oninput="updateProgress('{credit_id}', {q_count})" data-credit="{credit_id}"></textarea>
+                <textarea id="{q_id}" class="desc-input" rows="4" placeholder="Describe..." oninput="onAnswer('{credit_id}')" data-credit="{credit_id}"></textarea>
               </div>'''
 
                     data_note_html = ""
@@ -288,8 +395,16 @@ for cat_name, cat_sheets in CATEGORIES.items():
               </div>'''
 
                     type_badge = q["type"]
+                    # Check if this question has a conditional dependency
+                    dep_attrs = ""
+                    is_conditional = q_id in conditional_rules
+                    if is_conditional:
+                        rule = conditional_rules[q_id]
+                        dep_attrs = f' data-depends-on="{rule["depends_on"]}" data-show-when="{rule["show_when"]}"'
+
+                    hidden_class = " q-hidden" if is_conditional else ""
                     pages_html += f'''
-        <div class="question-card {type_class}">
+        <div class="question-card {type_class}{hidden_class}" id="card-{q_id}"{dep_attrs}>
           <div class="question-header">
             <span class="question-ref">{esc(q["ref"])}</span>
             <span class="question-type-badge {type_class}-badge">{esc(type_badge)}</span>
@@ -808,6 +923,56 @@ body {{
 .export-option-label {{ font-weight: 600; font-size: 14px; margin-bottom: 4px; }}
 .export-option-desc {{ font-size: 11px; color: var(--text-light); line-height: 1.4; }}
 
+/* ── Conditional visibility ── */
+.q-hidden {{
+  display: none !important;
+}}
+.q-revealed {{
+  animation: fadeSlideIn 0.3s ease;
+}}
+@keyframes fadeSlideIn {{
+  from {{ opacity: 0; transform: translateY(-8px); }}
+  to {{ opacity: 1; transform: translateY(0); }}
+}}
+
+/* ── Review mode ── */
+body.review-mode .question-card {{
+  display: none !important;
+}}
+body.review-mode .question-card.q-answered {{
+  display: block !important;
+}}
+body.review-mode .question-card .response-field {{
+  pointer-events: none;
+  opacity: 0.7;
+}}
+body.review-mode .question-card textarea,
+body.review-mode .question-card select {{
+  background: #f9f9f9;
+}}
+body.review-mode .level-header,
+body.review-mode .criteria-header {{
+  display: none;
+}}
+body.review-mode .criteria-header.has-answers {{
+  display: block;
+}}
+body.review-mode .level-header.has-answers {{
+  display: block;
+}}
+.review-active {{
+  background: rgba(255,255,255,0.35) !important;
+  font-weight: 700 !important;
+}}
+
+/* Conditional hint on gateway questions */
+.q-gateway-hint {{
+  font-size: 11px;
+  color: var(--text-light);
+  margin-top: 4px;
+  font-style: italic;
+}}
+
 /* ── Responsive ── */
 @media (max-width: 768px) {{
   .menu-toggle {{ display: block; }}
@@ -860,6 +1025,7 @@ body {{
   <span class="subtitle">Submission Forms</span>
   <div class="header-actions">
     <button class="header-btn" onclick="showDashboard()">Dashboard</button>
+    <button class="header-btn" id="review-btn" onclick="toggleReview()">Review</button>
     <button class="header-btn" onclick="saveAllResponses()">Save</button>
     <button class="header-btn primary" onclick="showExportModal()">Export</button>
   </div>
@@ -944,6 +1110,9 @@ body {{
 <input type="file" id="import-file" accept=".json" style="display:none" onchange="handleImport(event)">
 
 <script>
+// ── Conditional rules ──
+const CONDITIONAL_RULES = {conditional_rules_json};
+
 // ── Navigation ──
 function showCredit(id) {{
   document.querySelectorAll('.credit-page').forEach(p => p.style.display = 'none');
@@ -956,7 +1125,6 @@ function showCredit(id) {{
   document.querySelectorAll('.sidebar-item').forEach(i => i.classList.remove('active'));
   const item = document.querySelector(`.sidebar-item[data-credit="${{id}}"]`);
   if (item) item.classList.add('active');
-  // Close sidebar on mobile
   document.getElementById('sidebar').classList.remove('open');
 }}
 
@@ -970,66 +1138,142 @@ function showDashboard() {{
   document.getElementById('sidebar').classList.remove('open');
 }}
 
-function toggleCategory(el) {{
-  el.classList.toggle('collapsed');
+function toggleCategory(el) {{ el.classList.toggle('collapsed'); }}
+function toggleSidebar() {{ document.getElementById('sidebar').classList.toggle('open'); }}
+
+// ── Conditional visibility engine ──
+function applyConditionalRules() {{
+  for (const [inputId, rule] of Object.entries(CONDITIONAL_RULES)) {{
+    const card = document.getElementById('card-' + inputId);
+    if (!card) continue;
+    const gateway = document.getElementById(rule.depends_on);
+    if (!gateway) continue;
+    const gatewayVal = gateway.value;
+    const shouldShow = gatewayVal === rule.show_when;
+
+    if (shouldShow) {{
+      if (card.classList.contains('q-hidden')) {{
+        card.classList.remove('q-hidden');
+        card.classList.add('q-revealed');
+      }}
+    }} else {{
+      card.classList.add('q-hidden');
+      card.classList.remove('q-revealed');
+      // Clear the answer when hiding (so hidden answers don't count)
+      const input = card.querySelector('select, textarea');
+      if (input && gatewayVal && gatewayVal !== rule.show_when) {{
+        // Only clear if the gateway has been explicitly answered to the opposite value
+      }}
+    }}
+  }}
 }}
 
-function toggleSidebar() {{
-  document.getElementById('sidebar').classList.toggle('open');
-}}
-
-// ── Progress tracking ──
-function updateProgress(creditId, total) {{
-  const inputs = document.querySelectorAll(`[data-credit="${{creditId}}"]`);
-  let answered = 0;
-  inputs.forEach(el => {{
-    if (el.tagName === 'SELECT' && el.value) answered++;
-    if (el.tagName === 'TEXTAREA' && el.value.trim()) answered++;
-  }});
-  const pct = total > 0 ? (answered / total) * 100 : 0;
-  const bar = document.getElementById(`${{creditId}}-progress`);
-  const text = document.getElementById(`${{creditId}}-progress-text`);
-  if (bar) bar.style.width = pct + '%';
-  if (text) text.textContent = `${{answered}} of ${{total}} answered`;
-
+// ── Unified answer handler ──
+function onAnswer(creditId) {{
+  applyConditionalRules();
+  updateProgress(creditId);
   // Auto-save
   clearTimeout(window._saveTimer);
   window._saveTimer = setTimeout(saveAllResponses, 2000);
 }}
 
-function updateDashboard() {{
-  const allInputs = document.querySelectorAll('[data-credit]');
-  let totalAnswered = 0;
-  const categoryStats = {{}};
+// ── Progress tracking (only counts visible questions) ──
+function updateProgress(creditId) {{
+  const page = document.getElementById(creditId);
+  if (!page) return;
+  const cards = page.querySelectorAll('.question-card');
+  let visible = 0, answered = 0;
+  cards.forEach(card => {{
+    if (card.classList.contains('q-hidden')) return;
+    visible++;
+    const input = card.querySelector('select, textarea');
+    if (!input) return;
+    const val = input.tagName === 'SELECT' ? input.value : input.value.trim();
+    if (val) {{
+      answered++;
+      card.classList.add('q-answered');
+    }} else {{
+      card.classList.remove('q-answered');
+    }}
+  }});
+  const pct = visible > 0 ? (answered / visible) * 100 : 0;
+  const bar = document.getElementById(`${{creditId}}-progress`);
+  const text = document.getElementById(`${{creditId}}-progress-text`);
+  if (bar) bar.style.width = pct + '%';
+  if (text) text.textContent = `${{answered}} of ${{visible}} answered`;
+}}
 
-  allInputs.forEach(el => {{
-    const val = el.tagName === 'SELECT' ? el.value : el.value.trim();
-    if (val) totalAnswered++;
+function updateAllProgress() {{
+  document.querySelectorAll('.credit-page').forEach(page => updateProgress(page.id));
+}}
+
+function updateDashboard() {{
+  let totalVisible = 0, totalAnswered = 0;
+  document.querySelectorAll('.credit-page').forEach(page => {{
+    page.querySelectorAll('.question-card').forEach(card => {{
+      if (card.classList.contains('q-hidden')) return;
+      totalVisible++;
+      const input = card.querySelector('select, textarea');
+      if (!input) return;
+      const val = input.tagName === 'SELECT' ? input.value : input.value.trim();
+      if (val) totalAnswered++;
+    }});
   }});
 
   document.getElementById('dash-answered').textContent = totalAnswered;
-  document.getElementById('dash-pct').textContent = Math.round((totalAnswered / {total_questions}) * 100) + '%';
+  document.getElementById('dash-pct').textContent = (totalVisible > 0 ? Math.round((totalAnswered / totalVisible) * 100) : 0) + '%';
 
   // Per-category
   const catMap = {json.dumps({cat: [c["sheet_name"] for c in all_credits if c["category"] == cat] for cat in CATEGORIES})};
   const creditMap = {json.dumps({c["sheet_name"]: {"id": f"credit-{i}", "count": len(c["questions"])} for i, c in enumerate(all_credits)})};
 
   for (const [cat, sheets] of Object.entries(catMap)) {{
-    let catTotal = 0, catAnswered = 0;
+    let catVisible = 0, catAnswered = 0;
     sheets.forEach(s => {{
       const info = creditMap[s];
       if (!info) return;
-      catTotal += info.count;
-      document.querySelectorAll(`[data-credit="${{info.id}}"]`).forEach(el => {{
-        const val = el.tagName === 'SELECT' ? el.value : el.value.trim();
+      const page = document.getElementById(info.id);
+      if (!page) return;
+      page.querySelectorAll('.question-card').forEach(card => {{
+        if (card.classList.contains('q-hidden')) return;
+        catVisible++;
+        const input = card.querySelector('select, textarea');
+        if (!input) return;
+        const val = input.tagName === 'SELECT' ? input.value : input.value.trim();
         if (val) catAnswered++;
       }});
     }});
-    const pct = catTotal > 0 ? Math.round((catAnswered / catTotal) * 100) : 0;
+    const pct = catVisible > 0 ? Math.round((catAnswered / catVisible) * 100) : 0;
     const bar = document.getElementById(`dash-${{cat.toLowerCase()}}-bar`);
     const pctEl = document.getElementById(`dash-${{cat.toLowerCase()}}-pct`);
     if (bar) bar.style.width = pct + '%';
     if (pctEl) pctEl.textContent = pct + '% complete';
+  }}
+}}
+
+// ── Review mode ──
+let reviewMode = false;
+function toggleReview() {{
+  reviewMode = !reviewMode;
+  document.body.classList.toggle('review-mode', reviewMode);
+  document.getElementById('review-btn').classList.toggle('review-active', reviewMode);
+
+  if (reviewMode) {{
+    // Mark which criteria/level headers have answered questions beneath them
+    document.querySelectorAll('.credit-page').forEach(page => {{
+      // Walk through all children of credit-body to find headers and check following cards
+      const body = page.querySelector('.credit-body');
+      if (!body) return;
+      let currentHeaders = [];
+      Array.from(body.children).forEach(el => {{
+        if (el.classList.contains('level-header') || el.classList.contains('criteria-header')) {{
+          el.classList.remove('has-answers');
+          currentHeaders.push(el);
+        }} else if (el.classList.contains('question-card') && el.classList.contains('q-answered')) {{
+          currentHeaders.forEach(h => h.classList.add('has-answers'));
+        }}
+      }});
+    }});
   }}
 }}
 
@@ -1058,22 +1302,8 @@ function loadResponses() {{
       const el = document.getElementById(id);
       if (el) el.value = val;
     }}
-    // Update all progress bars
-    document.querySelectorAll('.credit-page').forEach(page => {{
-      const creditId = page.id;
-      const inputs = page.querySelectorAll('[data-credit]');
-      const total = inputs.length;
-      let answered = 0;
-      inputs.forEach(el => {{
-        const v = el.tagName === 'SELECT' ? el.value : el.value.trim();
-        if (v) answered++;
-      }});
-      const pct = total > 0 ? (answered / total) * 100 : 0;
-      const bar = document.getElementById(`${{creditId}}-progress`);
-      const text = document.getElementById(`${{creditId}}-progress-text`);
-      if (bar) bar.style.width = pct + '%';
-      if (text) text.textContent = `${{answered}} of ${{total}} answered`;
-    }});
+    applyConditionalRules();
+    updateAllProgress();
     updateDashboard();
   }} catch(e) {{
     console.error('Load failed', e);
@@ -1270,6 +1500,8 @@ document.addEventListener('keydown', function(e) {{
 // ── Init ──
 window.addEventListener('DOMContentLoaded', function() {{
   loadResponses();
+  applyConditionalRules();
+  updateAllProgress();
   updateDashboard();
 }});
 </script>
