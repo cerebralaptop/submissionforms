@@ -278,6 +278,23 @@ for ci, c in enumerate(all_credits):
 
 conditional_rules_json = json.dumps(conditional_rules)
 
+# Build search index for client-side search
+search_index = []
+for ci, c in enumerate(all_credits):
+    credit_id = f"credit-{ci}"
+    for q in c["questions"]:
+        q_id = f"{credit_id}-{q['ref'].replace('.', '-')}"
+        search_index.append({
+            "ref": q["ref"],
+            "credit": c["sheet_name"],
+            "creditId": credit_id,
+            "cardId": f"card-{q_id}",
+            "type": q["type"],
+            "question": q["question"],
+            "note": q["data_note"],
+        })
+search_index_json = json.dumps(search_index)
+
 # ── Generate HTML ────────────────────────────────────────────────────────────
 def esc(s):
     return html_mod.escape(str(s)) if s else ""
@@ -487,7 +504,58 @@ html = f'''<!DOCTYPE html>
   --green-primary: #1F4E28;
   --green-mid: #2E7D32;
   --green-light: #E8F5E9;
+  --card-bg: #ffffff;
+  --input-bg: #ffffff;
+  --hover-bg: #E8F5E9;
+  --shadow: rgba(0,0,0,0.06);
 }}
+
+html.dark {{
+  --bg: #1a1d21;
+  --text: #e0e0e0;
+  --text-light: #999;
+  --border: #333;
+  --white: #23272e;
+  --green-dark: #0f1f14;
+  --green-light: #1a2e1f;
+  --card-bg: #282c34;
+  --input-bg: #2c313a;
+  --hover-bg: #1e3325;
+  --shadow: rgba(0,0,0,0.2);
+}}
+html.dark .app-header {{ background: #0a1210; }}
+html.dark .sidebar {{ background: #1e2127; }}
+html.dark .question-card {{ background: var(--card-bg); border-color: var(--border); }}
+html.dark .q-descriptive {{ border-left-color: #388E3C; }}
+html.dark .q-data {{ border-left-color: #1E88E5; }}
+html.dark .q-condition {{ border-left-color: #9575CD; }}
+html.dark .question-card:hover {{ box-shadow: 0 2px 8px rgba(0,0,0,0.2); }}
+html.dark textarea, html.dark select {{
+  background: var(--input-bg) !important;
+  color: var(--text);
+  border-color: var(--border);
+}}
+html.dark textarea:focus, html.dark select:focus {{
+  border-color: var(--green-mid);
+  box-shadow: 0 0 0 2px rgba(46,125,50,0.25);
+}}
+html.dark .dash-stat, html.dark .dash-card {{ background: var(--card-bg); box-shadow: 0 1px 4px var(--shadow); }}
+html.dark .modal {{ background: var(--card-bg); color: var(--text); }}
+html.dark .modal-btn {{ background: var(--input-bg); color: var(--text); border-color: var(--border); }}
+html.dark .export-option {{ border-color: var(--border); }}
+html.dark .export-option:hover {{ border-color: var(--green-mid); }}
+html.dark .history-panel {{ background: var(--card-bg); }}
+html.dark .guidance-content {{ background: #2a2520; border-color: #3d3520; color: #bbb; }}
+html.dark .guidance-icon {{ background: #3d3520; border-color: #5a4a20; }}
+html.dark .gaps-panel {{ background: #2d2518; border-color: #4a3a20; }}
+html.dark .criteria-header {{ background: var(--green-light) !important; }}
+html.dark .q-descriptive-badge {{ background: #1a2e1f; color: #66BB6A; }}
+html.dark .q-data-badge {{ background: #1a2535; color: #64B5F6; }}
+html.dark .q-condition-badge {{ background: #251a35; color: #B39DDB; }}
+html.dark .credit-page.credit-na::after {{ color: var(--text-light); }}
+html.dark ::-webkit-scrollbar-thumb {{ background: #444; }}
+html.dark ::-webkit-scrollbar-thumb:hover {{ background: #555; }}
+html.dark .save-toast {{ background: var(--green-mid); }}
 
 html {{ height: 100%; }}
 body {{
@@ -1220,6 +1288,121 @@ body.review-mode .gaps-panel {{ display: block; }}
 .autosave-indicator {{ font-size: 11px; opacity: 0.6; transition: opacity 0.3s; }}
 .autosave-indicator.saving {{ opacity: 1; }}
 
+/* ── Dark mode toggle ── */
+.dark-toggle {{
+  background: none;
+  border: 1px solid rgba(255,255,255,0.2);
+  color: white;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  cursor: pointer;
+  font-size: 15px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s;
+  padding: 0;
+  flex-shrink: 0;
+}}
+.dark-toggle:hover {{ background: rgba(255,255,255,0.15); }}
+
+/* ── Search ── */
+.search-container {{
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+  position: relative;
+}}
+.search-input {{
+  width: 100%;
+  padding: 8px 10px 8px 30px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 13px;
+  background: var(--bg);
+  color: var(--text);
+  outline: none;
+  transition: border-color 0.2s;
+}}
+.search-input:focus {{ border-color: var(--green-primary); }}
+.search-input::placeholder {{ color: var(--text-light); }}
+.search-icon {{
+  position: absolute;
+  left: 22px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 13px;
+  color: var(--text-light);
+  pointer-events: none;
+}}
+.search-clear {{
+  position: absolute;
+  right: 20px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  font-size: 16px;
+  color: var(--text-light);
+  cursor: pointer;
+  display: none;
+  padding: 2px 4px;
+}}
+.search-clear.visible {{ display: block; }}
+.search-results {{
+  display: none;
+  max-height: calc(100vh - var(--header-height) - 100px);
+  overflow-y: auto;
+  padding: 0;
+}}
+.search-results.active {{ display: block; }}
+.search-result-item {{
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  transition: background 0.1s;
+}}
+.search-result-item:hover {{ background: var(--hover-bg); }}
+.search-result-ref {{
+  font-family: monospace;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--green-primary);
+}}
+.search-result-credit {{
+  font-size: 10px;
+  color: var(--text-light);
+  margin-left: 8px;
+}}
+.search-result-text {{
+  font-size: 12px;
+  color: var(--text);
+  margin-top: 3px;
+  line-height: 1.4;
+}}
+.search-result-text mark {{
+  background: #FFEE58;
+  color: #000;
+  border-radius: 2px;
+  padding: 0 1px;
+}}
+html.dark .search-result-text mark {{
+  background: #5a4a10;
+  color: #eee;
+}}
+.search-result-count {{
+  padding: 8px 16px;
+  font-size: 12px;
+  color: var(--text-light);
+  border-bottom: 1px solid var(--border);
+}}
+.search-no-results {{
+  padding: 20px 16px;
+  text-align: center;
+  color: var(--text-light);
+  font-size: 13px;
+}}
+
 /* ── Responsive ── */
 @media (max-width: 768px) {{
   .menu-toggle {{ display: block; }}
@@ -1277,15 +1460,24 @@ body.review-mode .gaps-panel {{ display: block; }}
     <button class="header-btn" onclick="showHistory()">History</button>
     <button class="header-btn" onclick="saveAllResponses()">Save</button>
     <button class="header-btn primary" onclick="showExportModal()">Export</button>
+    <button class="dark-toggle" id="dark-toggle" onclick="toggleDark()" title="Toggle dark mode">&#9790;</button>
   </div>
 </header>
 
 <!-- Sidebar -->
 <nav class="sidebar" id="sidebar">
-  <div class="sidebar-item active" data-credit="dashboard" onclick="showDashboard()" style="padding:14px 16px;font-weight:600;border-bottom:1px solid var(--border);">
-    <span class="sidebar-item-name">&#9638; Dashboard</span>
+  <div class="search-container">
+    <span class="search-icon">&#128269;</span>
+    <input type="text" class="search-input" id="search-input" placeholder="Search questions..." oninput="onSearch(this.value)" onfocus="onSearchFocus()" />
+    <button class="search-clear" id="search-clear" onclick="clearSearch()">&times;</button>
   </div>
-  {sidebar_html}
+  <div class="search-results" id="search-results"></div>
+  <div id="sidebar-nav">
+    <div class="sidebar-item active" data-credit="dashboard" onclick="showDashboard()" style="padding:14px 16px;font-weight:600;border-bottom:1px solid var(--border);">
+      <span class="sidebar-item-name">&#9638; Dashboard</span>
+    </div>
+    {sidebar_html}
+  </div>
 </nav>
 
 <!-- Main Content -->
@@ -2012,16 +2204,142 @@ function handleImport(event) {{
   event.target.value = '';
 }}
 
+// ── Dark mode ──
+function toggleDark() {{
+  document.documentElement.classList.toggle('dark');
+  const isDark = document.documentElement.classList.contains('dark');
+  localStorage.setItem('greenstar_dark', isDark ? '1' : '0');
+  document.getElementById('dark-toggle').textContent = isDark ? '\\u2600' : '\\u263E';
+}}
+
+function loadDarkMode() {{
+  const pref = localStorage.getItem('greenstar_dark');
+  // Also check system preference if no saved pref
+  const prefersDark = pref === '1' || (!pref && window.matchMedia('(prefers-color-scheme: dark)').matches);
+  if (prefersDark) {{
+    document.documentElement.classList.add('dark');
+    document.getElementById('dark-toggle').textContent = '\\u2600';
+  }}
+}}
+
+// ── Search ──
+const SEARCH_INDEX = {search_index_json};
+let searchTimeout = null;
+
+function onSearch(query) {{
+  const clearBtn = document.getElementById('search-clear');
+  clearBtn.classList.toggle('visible', query.length > 0);
+
+  clearTimeout(searchTimeout);
+  if (!query.trim()) {{
+    hideSearchResults();
+    return;
+  }}
+  searchTimeout = setTimeout(() => performSearch(query.trim()), 150);
+}}
+
+function onSearchFocus() {{
+  const q = document.getElementById('search-input').value.trim();
+  if (q) performSearch(q);
+}}
+
+function performSearch(query) {{
+  const terms = query.toLowerCase().split(/\\s+/).filter(t => t.length > 1);
+  if (terms.length === 0) {{ hideSearchResults(); return; }}
+
+  const results = [];
+  SEARCH_INDEX.forEach(item => {{
+    const haystack = (item.ref + ' ' + item.credit + ' ' + item.question + ' ' + item.note).toLowerCase();
+    const matches = terms.every(t => haystack.includes(t));
+    if (matches) results.push(item);
+  }});
+
+  renderSearchResults(results, terms, query);
+}}
+
+function renderSearchResults(results, terms, query) {{
+  const container = document.getElementById('search-results');
+  const navEl = document.getElementById('sidebar-nav');
+
+  if (results.length === 0) {{
+    container.innerHTML = '<div class="search-no-results">No questions match your search.</div>';
+    container.classList.add('active');
+    navEl.style.display = 'none';
+    return;
+  }}
+
+  // Limit displayed results
+  const shown = results.slice(0, 30);
+  let html = `<div class="search-result-count">${{results.length}} result${{results.length > 1 ? 's' : ''}}${{results.length > 30 ? ' (showing first 30)' : ''}}</div>`;
+
+  shown.forEach(item => {{
+    // Highlight matched terms in question text
+    let text = escapeHtml(item.question);
+    terms.forEach(t => {{
+      const re = new RegExp('(' + t.replace(/[.*+?^${{}}()|[\\]\\\\]/g, '\\\\$&') + ')', 'gi');
+      text = text.replace(re, '<mark>$1</mark>');
+    }});
+
+    html += `<div class="search-result-item" onclick="goToQuestion('${{item.creditId}}', '${{item.cardId}}')">
+      <div><span class="search-result-ref">${{escapeHtml(item.ref)}}</span><span class="search-result-credit">${{escapeHtml(item.credit)}}</span></div>
+      <div class="search-result-text">${{text}}</div>
+    </div>`;
+  }});
+
+  container.innerHTML = html;
+  container.classList.add('active');
+  navEl.style.display = 'none';
+}}
+
+function escapeHtml(str) {{
+  const d = document.createElement('div');
+  d.textContent = str;
+  return d.innerHTML;
+}}
+
+function goToQuestion(creditId, cardId) {{
+  clearSearch();
+  showCredit(creditId);
+  // Small delay to let the page render
+  setTimeout(() => {{
+    const card = document.getElementById(cardId);
+    if (card) {{
+      card.scrollIntoView({{ behavior: 'smooth', block: 'center' }});
+      card.style.outline = '2px solid var(--green-mid)';
+      card.style.outlineOffset = '2px';
+      setTimeout(() => {{ card.style.outline = ''; card.style.outlineOffset = ''; }}, 2000);
+    }}
+  }}, 100);
+}}
+
+function clearSearch() {{
+  document.getElementById('search-input').value = '';
+  document.getElementById('search-clear').classList.remove('visible');
+  hideSearchResults();
+}}
+
+function hideSearchResults() {{
+  document.getElementById('search-results').classList.remove('active');
+  document.getElementById('search-results').innerHTML = '';
+  document.getElementById('sidebar-nav').style.display = '';
+}}
+
 // ── Keyboard shortcut ──
 document.addEventListener('keydown', function(e) {{
   if ((e.ctrlKey || e.metaKey) && e.key === 's') {{
     e.preventDefault();
     saveAllResponses();
   }}
+  // Ctrl/Cmd+K to focus search
+  if ((e.ctrlKey || e.metaKey) && e.key === 'k') {{
+    e.preventDefault();
+    document.getElementById('search-input').focus();
+  }}
 }});
 
 // ── Init ──
 window.addEventListener('DOMContentLoaded', function() {{
+  loadDarkMode();
   loadNAState();
   loadResponses();
   applyConditionalRules();
