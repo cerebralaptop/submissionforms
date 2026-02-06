@@ -5,6 +5,7 @@ import json
 import html as html_mod
 from openpyxl import load_workbook
 from openpyxl.utils import get_column_letter
+from docx import Document as DocxDocument
 
 # ── Parse Excel ──────────────────────────────────────────────────────────────
 wb = load_workbook("Green_Star_Buildings_v1.1_Submission_Questions.xlsx")
@@ -295,9 +296,222 @@ for ci, c in enumerate(all_credits):
         })
 search_index_json = json.dumps(search_index)
 
+# ── Parse Submission Guidelines DOCX ─────────────────────────────────────────
+docx_doc = DocxDocument("Green Star Buildings v1.1_Submission Guidelines_RevA.docx")
+
+# Front-matter and category-only H1 headings to skip
+_skip_h1 = {"Version control", "Table of contents", "Introduction",
+            "Responsible", "Healthy", "Resilient", "Positive",
+            "Places", "People", "Nature", "Leadership"}
+
+docx_guidance = {}
+_cur_credit = _cur_h2 = _cur_h3 = _cur_h4 = _cur_h6 = None
+
+for para in docx_doc.paragraphs:
+    sname = para.style.name if para.style else ""
+    txt = para.text.strip()
+    if not txt:
+        continue
+
+    if "Heading 1" in sname:
+        if txt in _skip_h1 or txt.startswith("Appendix"):
+            _cur_credit = None
+            continue
+        _cur_credit = txt
+        _cur_h2 = _cur_h3 = _cur_h4 = _cur_h6 = None
+        docx_guidance[_cur_credit] = {
+            "outcome": "",
+            "requirements": {},   # level_name -> {criteria_name: text}
+            "guidance": {},       # topic -> text
+            "evidence": {},       # topic -> [items]
+            "definitions": [],    # [text, ...]
+        }
+    elif _cur_credit and _cur_credit in docx_guidance:
+        g = docx_guidance[_cur_credit]
+        if "Heading 2" in sname:
+            _cur_h2 = txt
+            _cur_h3 = _cur_h4 = _cur_h6 = None
+        elif "Heading 3" in sname:
+            _cur_h3 = txt
+            _cur_h4 = _cur_h6 = None
+            if _cur_h2 == "Requirements" and _cur_h3 not in g["requirements"]:
+                g["requirements"][_cur_h3] = {}
+        elif "Heading 4" in sname:
+            _cur_h4 = txt
+            _cur_h6 = None
+            if _cur_h2 == "Requirements" and _cur_h3 and _cur_h3 in g["requirements"]:
+                g["requirements"][_cur_h3][_cur_h4] = ""
+        elif "Heading 5" in sname or "Heading 6" in sname or "Heading 7" in sname:
+            _cur_h6 = txt
+            if _cur_h2 == "Guidance":
+                g["guidance"][_cur_h6] = ""
+            elif _cur_h2 == "Submission content":
+                g["evidence"][_cur_h6] = []
+        else:
+            # Body paragraph
+            if _cur_h2 == "Outcome":
+                g["outcome"] += txt + " "
+            elif _cur_h2 == "Requirements" and _cur_h3 and _cur_h4:
+                if _cur_h3 in g["requirements"] and _cur_h4 in g["requirements"][_cur_h3]:
+                    g["requirements"][_cur_h3][_cur_h4] += txt + " "
+            elif _cur_h2 == "Guidance":
+                if _cur_h6 and _cur_h6 in g["guidance"]:
+                    g["guidance"][_cur_h6] += txt + " "
+                else:
+                    g["guidance"]["_general"] = g["guidance"].get("_general", "") + txt + " "
+            elif _cur_h2 == "Submission content":
+                if _cur_h6 and _cur_h6 in g["evidence"]:
+                    g["evidence"][_cur_h6].append(txt)
+            elif _cur_h2 == "Definitions":
+                g["definitions"].append(txt)
+
+print(f"  DOCX credits parsed: {len(docx_guidance)}")
+
+def _find_docx(sheet_name):
+    """Find DOCX guidance data for an Excel credit sheet name."""
+    sn = sheet_name.lower().replace(" ", "")
+    for dname, data in docx_guidance.items():
+        dn = dname.lower().replace(" ", "")
+        if sn in dn or dn in sn:
+            return data
+    return None
+
+def _match_criteria(crit_name, req_dict, guide_dict, ev_dict):
+    """Find best matching DOCX section for a criteria name."""
+    cn = crit_name.lower().replace(" ", "").replace("-", "").replace("–", "")
+    if not cn or cn == "general":
+        return None, None, None
+
+    req_match = None
+    for level, crits in req_dict.items():
+        for cname, ctext in crits.items():
+            cnorm = cname.lower().replace(" ", "").replace("-", "").replace("–", "")
+            if cn in cnorm or cnorm in cn:
+                req_match = (level, cname, ctext.strip())
+                break
+
+    guide_match = None
+    for topic, gtext in guide_dict.items():
+        if topic == "_general":
+            continue
+        tn = topic.lower().replace(" ", "").replace("-", "").replace("–", "")
+        if cn in tn or tn in cn:
+            guide_match = gtext.strip()
+            break
+
+    ev_match = None
+    for topic, items in ev_dict.items():
+        tn = topic.lower().replace(" ", "").replace("-", "").replace("–", "")
+        if cn in tn or tn in cn:
+            ev_match = items
+            break
+
+    return req_match, guide_match, ev_match
+
+
 # ── Generate HTML ────────────────────────────────────────────────────────────
 def esc(s):
     return html_mod.escape(str(s)) if s else ""
+
+
+def build_guidance_html(sheet_name, crit_name, q_type, q_text, data_note):
+    """Build enhanced guidance HTML with tabs: Guidelines, Example, Tips."""
+    g = _find_docx(sheet_name)
+
+    # If no DOCX data, fall back to simple data_note
+    if not g:
+        if data_note:
+            return (
+                '<div class="guidance-wrapper">'
+                '<button class="guidance-toggle" onclick="this.parentElement.classList.toggle(\'open\')">'
+                '<span class="guidance-icon">?</span> Guidance '
+                '<span class="guidance-arrow">&#9662;</span></button>'
+                f'<div class="guidance-content"><div class="guidance-tab-pane active">{esc(data_note)}</div></div></div>'
+            )
+        return ""
+
+    # ── Guidelines tab ──
+    gparts = []
+    if g["outcome"]:
+        gparts.append(f'<p class="g-outcome"><strong>Credit Outcome:</strong> {esc(g["outcome"].strip()[:300])}</p>')
+
+    req_match, guide_match, ev_match = _match_criteria(
+        crit_name or "", g["requirements"], g["guidance"], g["evidence"]
+    )
+
+    if req_match:
+        lvl, cn, ct = req_match
+        if ct:
+            gparts.append(f'<p class="g-req"><strong>{esc(lvl)} &mdash; {esc(cn)}:</strong> {esc(ct[:400])}</p>')
+    else:
+        for lvl, crits in g["requirements"].items():
+            for cn, ct in crits.items():
+                t = ct.strip()[:200]
+                if t:
+                    gparts.append(f'<p class="g-req"><strong>{esc(lvl)} &mdash; {esc(cn)}:</strong> {esc(t)}</p>')
+
+    if ev_match:
+        items_html = "".join(f"<li>{esc(e[:150])}</li>" for e in ev_match[:5])
+        gparts.append(f'<p class="g-ev"><strong>Recommended Evidence:</strong></p><ul class="g-list">{items_html}</ul>')
+
+    guidelines_html = "".join(gparts) if gparts else "<p>No specific guidelines found for this question.</p>"
+
+    # ── Example tab ──
+    if q_type == "Condition (Y/N)":
+        example_html = (
+            '<p><strong>Yes:</strong> Select if the requirement has been met and can be evidenced.</p>'
+            '<p><strong>No:</strong> Select if not yet implemented or not applicable to this project.</p>'
+        )
+    elif q_type == "Data":
+        example_html = (
+            '<p>Provide the specific numerical value or data point. Include units where applicable.</p>'
+            '<p><em>Example format:</em> &ldquo;85%&rdquo; or &ldquo;2,500 tonnes&rdquo; or &ldquo;ISO 14001 certified&rdquo;</p>'
+            '<p>Reference the source document or calculation methodology used.</p>'
+        )
+    else:
+        example_html = (
+            '<p>Structure your response to address the requirement:</p>'
+            '<ol class="g-list">'
+            '<li><strong>What:</strong> State what was done or implemented</li>'
+            '<li><strong>How:</strong> Describe the approach or methodology</li>'
+            '<li><strong>Evidence:</strong> Reference supporting documentation</li>'
+            '</ol>'
+            '<p>Aim for 2&ndash;4 concise sentences that directly address the question.</p>'
+        )
+
+    # ── Tips tab ──
+    tparts = []
+    if guide_match:
+        tparts.append(f'<p class="g-tip">{esc(guide_match[:500])}</p>')
+    elif g["guidance"].get("_general"):
+        tparts.append(f'<p class="g-tip">{esc(g["guidance"]["_general"].strip()[:400])}</p>')
+
+    if g["definitions"]:
+        defs_html = "".join(f"<li>{esc(d[:150])}</li>" for d in g["definitions"][:3])
+        tparts.append(f'<p class="g-defs"><strong>Key Definitions:</strong></p><ul class="g-list">{defs_html}</ul>')
+
+    if data_note:
+        tparts.append(f'<p class="g-note"><strong>Research Note:</strong> {esc(data_note)}</p>')
+
+    tips_html = "".join(tparts) if tparts else "<p>No additional tips available.</p>"
+
+    # ── Assemble tabbed panel ──
+    return (
+        '<div class="guidance-wrapper">'
+        '<button class="guidance-toggle" onclick="this.parentElement.classList.toggle(\'open\')">'
+        '<span class="guidance-icon">?</span> Guidance '
+        '<span class="guidance-arrow">&#9662;</span></button>'
+        '<div class="guidance-content">'
+        '<div class="guidance-tabs">'
+        '<button class="g-tab active" onclick="switchTab(this,0)">Guidelines</button>'
+        '<button class="g-tab" onclick="switchTab(this,1)">Example</button>'
+        '<button class="g-tab" onclick="switchTab(this,2)">Tips</button>'
+        '</div>'
+        f'<div class="guidance-tab-pane active">{guidelines_html}</div>'
+        f'<div class="guidance-tab-pane">{example_html}</div>'
+        f'<div class="guidance-tab-pane">{tips_html}</div>'
+        '</div></div>'
+    )
 
 category_colors = {
     "Responsible": {"bg": "#1F4E28", "light": "#E8F5E9", "mid": "#A5D6A7"},
@@ -417,16 +631,13 @@ for cat_name, cat_sheets in CATEGORIES.items():
                 <textarea id="{q_id}" class="desc-input" rows="4" placeholder="Describe..." oninput="onAnswer('{credit_id}')" data-credit="{credit_id}"></textarea>
               </div>'''
 
-                    data_note_html = ""
-                    if q["data_note"]:
-                        data_note_html = f'''
-              <div class="guidance-wrapper">
-                <button class="guidance-toggle" onclick="this.parentElement.classList.toggle('open')">
-                  <span class="guidance-icon">?</span> Guidance
-                  <span class="guidance-arrow">&#9662;</span>
-                </button>
-                <div class="guidance-content">{esc(q["data_note"])}</div>
-              </div>'''
+                    data_note_html = build_guidance_html(
+                        credit["sheet_name"],
+                        crit["name"],
+                        q["type"],
+                        q["question"],
+                        q["data_note"],
+                    )
 
                     type_badge = q["type"]
                     # Check if this question has a conditional dependency
@@ -547,6 +758,13 @@ html.dark .export-option:hover {{ border-color: var(--green-mid); }}
 html.dark .history-panel {{ background: var(--card-bg); }}
 html.dark .guidance-content {{ background: #2a2520; border-color: #3d3520; color: #bbb; }}
 html.dark .guidance-icon {{ background: #3d3520; border-color: #5a4a20; }}
+html.dark .g-tab {{ color: #777; }}
+html.dark .g-tab:hover {{ color: #FFB300; }}
+html.dark .g-tab.active {{ color: #FFB300; border-bottom-color: #FFB300; }}
+html.dark .guidance-tab-pane {{ color: #aaa; }}
+html.dark .guidance-tabs {{ border-bottom-color: #5a4a20; }}
+html.dark .g-note {{ border-top-color: #5a4a20; }}
+html.dark .g-outcome {{ color: #81C784; }}
 html.dark .gaps-panel {{ background: #2d2518; border-color: #4a3a20; }}
 html.dark .criteria-header {{ background: var(--green-light) !important; }}
 html.dark .q-descriptive-badge {{ background: #1a2e1f; color: #66BB6A; }}
@@ -1151,7 +1369,36 @@ body.review-mode .level-header.has-answers {{
   border-radius: 4px;
   padding: 0 10px;
 }}
-.guidance-wrapper.open .guidance-content {{ max-height: 200px; padding: 8px 10px; }}
+.guidance-wrapper.open .guidance-content {{ max-height: 500px; padding: 8px 10px; overflow-y: auto; }}
+
+/* ── Guidance tabs ── */
+.guidance-tabs {{
+  display: flex;
+  gap: 0;
+  margin-bottom: 8px;
+  border-bottom: 1px solid #FFD54F;
+}}
+.g-tab {{
+  background: none;
+  border: none;
+  padding: 5px 12px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #999;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition: all 0.15s;
+}}
+.g-tab:hover {{ color: #F57F17; }}
+.g-tab.active {{ color: #F57F17; border-bottom-color: #F57F17; }}
+.guidance-tab-pane {{ display: none; font-size: 12px; line-height: 1.6; color: #555; }}
+.guidance-tab-pane.active {{ display: block; }}
+.guidance-tab-pane p {{ margin-bottom: 6px; }}
+.g-list {{ margin: 4px 0 8px 18px; }}
+.g-list li {{ margin-bottom: 3px; font-size: 12px; }}
+.g-outcome {{ color: #2E7D32; font-style: italic; }}
+.g-req {{ margin-bottom: 6px; }}
+.g-note {{ margin-top: 8px; padding-top: 8px; border-top: 1px dashed #FFD54F; }}
 
 /* ── Wizard mode ── */
 .wizard-toggle {{
@@ -2322,6 +2569,16 @@ function hideSearchResults() {{
   document.getElementById('search-results').classList.remove('active');
   document.getElementById('search-results').innerHTML = '';
   document.getElementById('sidebar-nav').style.display = '';
+}}
+
+// ── Guidance tab switching ──
+function switchTab(btn, idx) {{
+  const wrapper = btn.closest('.guidance-content');
+  wrapper.querySelectorAll('.g-tab').forEach(t => t.classList.remove('active'));
+  const panes = wrapper.querySelectorAll('.guidance-tab-pane');
+  panes.forEach(p => p.classList.remove('active'));
+  btn.classList.add('active');
+  if (panes[idx]) panes[idx].classList.add('active');
 }}
 
 // ── Keyboard shortcut ──
