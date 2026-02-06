@@ -414,6 +414,51 @@ def esc(s):
     return html_mod.escape(str(s)) if s else ""
 
 
+def _build_example(q_type, q_text, req_text):
+    """Generate a short, concrete example answer based on question type and content."""
+    qt = q_text.lower()
+
+    if q_type == "Condition (Y/N)":
+        return '<p class="g-example">Yes</p>'
+
+    if q_type == "Data":
+        if any(w in qt for w in ["percentage", "percent", "%", "proportion"]):
+            return '<p class="g-example">85%</p>'
+        if any(w in qt for w in ["area", "m²", "sqm", "square met", "floor area", "gfa", "nla"]):
+            return '<p class="g-example">2,500 m²</p>'
+        if any(w in qt for w in ["weight", "tonne", "kg", "mass"]):
+            return '<p class="g-example">450 tonnes</p>'
+        if any(w in qt for w in ["date", "when was", "when did"]):
+            return '<p class="g-example">15 March 2025</p>'
+        if any(w in qt for w in ["cost", "$", "value", "budget", "spend"]):
+            return '<p class="g-example">$125,000 AUD</p>'
+        if any(w in qt for w in ["number", "how many", "count", "quantity"]):
+            return '<p class="g-example">12</p>'
+        if any(w in qt for w in ["volume", "litre", "l/", "kl", "water"]):
+            return '<p class="g-example">1,200 kL/year</p>'
+        if any(w in qt for w in ["energy", "kwh", "mj", "gj"]):
+            return '<p class="g-example">850 MJ/m²/year</p>'
+        if any(w in qt for w in ["emission", "co2", "carbon", "tco2"]):
+            return '<p class="g-example">125 tCO&#8322;-e</p>'
+        if any(w in qt for w in ["rating", "score", "star", "level"]):
+            return '<p class="g-example">7.5</p>'
+        if any(w in qt for w in ["name", "who", "accreditation"]):
+            return '<p class="g-example">Jane Smith, ABC Consulting, #12345</p>'
+        return '<p class="g-example"><em>[Value with units]</em></p>'
+
+    # Descriptive — build a short example from the requirement context
+    if req_text:
+        first = req_text.split(".")[0].strip()
+        if len(first) > 10:
+            return f'<p class="g-example">{esc(first[:180])}.</p>'
+
+    if "identify" in qt or "list" in qt:
+        return '<p class="g-example"><em>[List each item with name, reference, and key details]</em></p>'
+    if "attach" in qt or "upload" in qt or "provide evidence" in qt:
+        return '<p class="g-example"><em>[Attach the relevant document]</em></p>'
+    return '<p class="g-example"><em>[1-2 sentences describing how the requirement was met, referencing evidence]</em></p>'
+
+
 def build_guidance_html(sheet_name, crit_name, q_type, q_text, data_note):
     """Build enhanced guidance HTML with tabs: Guidelines, Example, Tips."""
     g = _find_docx(sheet_name)
@@ -456,44 +501,29 @@ def build_guidance_html(sheet_name, crit_name, q_type, q_text, data_note):
 
     guidelines_html = "".join(gparts) if gparts else "<p>No specific guidelines found for this question.</p>"
 
-    # ── Example tab ──
-    if q_type == "Condition (Y/N)":
-        example_html = (
-            '<p><strong>Yes:</strong> Select if the requirement has been met and can be evidenced.</p>'
-            '<p><strong>No:</strong> Select if not yet implemented or not applicable to this project.</p>'
-        )
-    elif q_type == "Data":
-        example_html = (
-            '<p>Provide the specific numerical value or data point. Include units where applicable.</p>'
-            '<p><em>Example format:</em> &ldquo;85%&rdquo; or &ldquo;2,500 tonnes&rdquo; or &ldquo;ISO 14001 certified&rdquo;</p>'
-            '<p>Reference the source document or calculation methodology used.</p>'
-        )
-    else:
-        example_html = (
-            '<p>Structure your response to address the requirement:</p>'
-            '<ol class="g-list">'
-            '<li><strong>What:</strong> State what was done or implemented</li>'
-            '<li><strong>How:</strong> Describe the approach or methodology</li>'
-            '<li><strong>Evidence:</strong> Reference supporting documentation</li>'
-            '</ol>'
-            '<p>Aim for 2&ndash;4 concise sentences that directly address the question.</p>'
-        )
+    # ── Example tab (short concrete sample answer) ──
+    req_text = req_match[2] if req_match else ""
+    example_html = _build_example(q_type, q_text, req_text)
 
-    # ── Tips tab ──
+    # ── Tips tab (watch-outs and pitfalls) ──
     tparts = []
     if guide_match:
-        tparts.append(f'<p class="g-tip">{esc(guide_match[:500])}</p>')
+        tparts.append(f'<p class="g-watchout"><span class="g-warn-icon">&#9888;</span> {esc(guide_match[:400])}</p>')
     elif g["guidance"].get("_general"):
-        tparts.append(f'<p class="g-tip">{esc(g["guidance"]["_general"].strip()[:400])}</p>')
+        tparts.append(f'<p class="g-watchout"><span class="g-warn-icon">&#9888;</span> {esc(g["guidance"]["_general"].strip()[:300])}</p>')
+
+    if ev_match:
+        ev_items = "".join(f"<li>{esc(e[:120])}</li>" for e in ev_match[:4])
+        tparts.append(f'<p class="g-checklist"><strong>&#10003; Don\'t forget to include:</strong></p><ul class="g-list">{ev_items}</ul>')
 
     if g["definitions"]:
-        defs_html = "".join(f"<li>{esc(d[:150])}</li>" for d in g["definitions"][:3])
-        tparts.append(f'<p class="g-defs"><strong>Key Definitions:</strong></p><ul class="g-list">{defs_html}</ul>')
+        for d in g["definitions"][:2]:
+            tparts.append(f'<p class="g-def-tip"><strong>&#128204; Definition:</strong> {esc(d[:150])}</p>')
 
     if data_note:
-        tparts.append(f'<p class="g-note"><strong>Research Note:</strong> {esc(data_note)}</p>')
+        tparts.append(f'<p class="g-note">{esc(data_note)}</p>')
 
-    tips_html = "".join(tparts) if tparts else "<p>No additional tips available.</p>"
+    tips_html = "".join(tparts) if tparts else "<p>No specific watch-outs for this question.</p>"
 
     # ── Assemble tabbed panel ──
     return (
@@ -763,8 +793,12 @@ html.dark .g-tab:hover {{ color: #FFB300; }}
 html.dark .g-tab.active {{ color: #FFB300; border-bottom-color: #FFB300; }}
 html.dark .guidance-tab-pane {{ color: #aaa; }}
 html.dark .guidance-tabs {{ border-bottom-color: #5a4a20; }}
-html.dark .g-note {{ border-top-color: #5a4a20; }}
+html.dark .g-note {{ border-top-color: #5a4a20; color: #777; }}
 html.dark .g-outcome {{ color: #81C784; }}
+html.dark .g-example {{ background: #1a2e1f; border-left-color: #388E3C; color: #81C784; }}
+html.dark .g-watchout {{ background: #2d2518; border-left-color: #E65100; }}
+html.dark .g-checklist {{ color: #81C784; }}
+html.dark .g-def-tip {{ color: #999; }}
 html.dark .gaps-panel {{ background: #2d2518; border-color: #4a3a20; }}
 html.dark .criteria-header {{ background: var(--green-light) !important; }}
 html.dark .q-descriptive-badge {{ background: #1a2e1f; color: #66BB6A; }}
@@ -1398,7 +1432,12 @@ body.review-mode .level-header.has-answers {{
 .g-list li {{ margin-bottom: 3px; font-size: 12px; }}
 .g-outcome {{ color: #2E7D32; font-style: italic; }}
 .g-req {{ margin-bottom: 6px; }}
-.g-note {{ margin-top: 8px; padding-top: 8px; border-top: 1px dashed #FFD54F; }}
+.g-example {{ background: #f0faf0; border-left: 3px solid #66BB6A; padding: 6px 10px; border-radius: 0 4px 4px 0; font-style: italic; color: #2E7D32; }}
+.g-watchout {{ background: #FFF8E1; border-left: 3px solid #FF9800; padding: 6px 10px; border-radius: 0 4px 4px 0; margin-bottom: 6px; }}
+.g-warn-icon {{ color: #FF9800; margin-right: 4px; }}
+.g-checklist {{ margin-top: 6px; font-weight: 600; color: #2E7D32; }}
+.g-def-tip {{ margin-top: 4px; font-size: 11px; color: #666; }}
+.g-note {{ margin-top: 8px; padding-top: 8px; border-top: 1px dashed #FFD54F; font-size: 11px; color: #888; }}
 
 /* ── Wizard mode ── */
 .wizard-toggle {{
