@@ -16,12 +16,7 @@ submission data, with full interactivity via VBA:
 """
 
 import json
-import struct
-import zlib
-import io
-import zipfile
-import copy
-import re
+import os
 import openpyxl
 from openpyxl import load_workbook, Workbook
 from openpyxl.styles import Font, Alignment, PatternFill, Border, Side, Protection, numbers
@@ -377,574 +372,13 @@ for ci, c in enumerate(all_credits):
 print(f"  {len(conditional_rules)} conditional rules")
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# STEP 4: Create the VBA project binary
+# STEP 4: Build VBA source code (exported as .bas for manual import)
 # ═══════════════════════════════════════════════════════════════════════════════
-print("Building VBA project...")
-
-
-def compress_vba(source_bytes):
-    """Compress VBA source using MS-OVBA compression (RLE variant)."""
-    compressed = bytearray(b'\x01')  # Signature byte
-    src_pos = 0
-    src_len = len(source_bytes)
-
-    while src_pos < src_len:
-        # Each chunk: up to 4096 bytes of uncompressed data
-        chunk_start = src_pos
-        chunk_end = min(src_pos + 4096, src_len)
-        chunk_data = source_bytes[chunk_start:chunk_end]
-
-        # Compress the chunk
-        compressed_chunk = bytearray()
-        token_buf = bytearray()
-        flags = 0
-        flag_count = 0
-
-        i = 0
-        while i < len(chunk_data):
-            if flag_count == 8:
-                compressed_chunk.append(flags)
-                compressed_chunk.extend(token_buf)
-                flags = 0
-                flag_count = 0
-                token_buf = bytearray()
-
-            # Try to find a match in the already-processed data
-            best_len = 0
-            best_off = 0
-            decompressed_current = chunk_start + i
-            decompressed_chunk_start = chunk_start
-
-            if i > 0:
-                # Calculate bit sizes for offset/length encoding
-                decompressed_so_far = i
-                bit_count = max(4, decompressed_so_far.bit_length())
-                max_len_bits = 16 - bit_count
-                max_length = (1 << max_len_bits) + 2
-
-                search_start = max(0, i - (1 << bit_count) + 1)
-                for j in range(search_start, i):
-                    match_len = 0
-                    while (i + match_len < len(chunk_data) and
-                           match_len < max_length and
-                           chunk_data[j + match_len] == chunk_data[i + match_len]):
-                        match_len += 1
-                        if j + match_len >= i:
-                            break
-                    if match_len >= 3 and match_len > best_len:
-                        best_len = match_len
-                        best_off = i - j
-
-            if best_len >= 3:
-                # Emit a copy token
-                decompressed_so_far = i
-                bit_count = max(4, decompressed_so_far.bit_length())
-                length_bits = 16 - bit_count
-
-                offset_encoded = best_off - 1
-                length_encoded = best_len - 3
-                token = (offset_encoded << length_bits) | length_encoded
-                token_buf.append(token & 0xFF)
-                token_buf.append((token >> 8) & 0xFF)
-                flags |= (1 << flag_count)
-                i += best_len
-            else:
-                # Emit a literal byte
-                token_buf.append(chunk_data[i])
-                i += 1
-
-            flag_count += 1
-
-        # Flush remaining tokens
-        if flag_count > 0:
-            compressed_chunk.append(flags)
-            compressed_chunk.extend(token_buf)
-
-        # Build chunk header
-        chunk_size = len(compressed_chunk)
-        is_compressed = 1
-        if chunk_size >= len(chunk_data):
-            # Compression didn't help, store raw
-            compressed_chunk = bytearray(chunk_data)
-            chunk_size = len(compressed_chunk)
-            is_compressed = 0
-
-        # Chunk header: 2 bytes
-        # Bits 0-11: chunk size - 3
-        # Bit 12-14: signature (0b011)
-        # Bit 15: is_compressed
-        header = ((chunk_size - 3) & 0x0FFF) | 0x3000
-        if is_compressed:
-            header |= 0x8000
-        compressed.append(header & 0xFF)
-        compressed.append((header >> 8) & 0xFF)
-        compressed.extend(compressed_chunk)
-
-        src_pos = chunk_end
-
-    return bytes(compressed)
-
-
-def build_cfb(streams):
-    """
-    Build a minimal Compound File Binary (CFB / OLE) container.
-    streams: list of (name, data_bytes) — paths like "VBA/dir"
-    Returns the complete binary content.
-    """
-    SECTOR_SIZE = 512
-    MINI_SECTOR_SIZE = 64
-    MINI_STREAM_CUTOFF = 0x1000
-
-    # Build directory tree
-    # Root entry is always first
-    entries = [{"name": "Root Entry", "type": 5, "data": b"", "children": [], "child_idx": -1}]
-    # Group streams by storage
-    storages = {}
-    for path, data in streams:
-        parts = path.split("/")
-        if len(parts) == 1:
-            entries.append({"name": parts[0], "type": 2, "data": data, "children": [], "child_idx": -1})
-            entries[0]["children"].append(len(entries) - 1)
-        else:
-            storage_name = parts[0]
-            stream_name = parts[1]
-            if storage_name not in storages:
-                storages[storage_name] = len(entries)
-                entries.append({"name": storage_name, "type": 1, "data": b"", "children": [], "child_idx": -1})
-                entries[0]["children"].append(len(entries) - 1)
-            entries.append({"name": stream_name, "type": 2, "data": data, "children": [], "child_idx": -1})
-            entries[storages[storage_name]]["children"].append(len(entries) - 1)
-
-    # Set child pointers (simple: first child is the root of a binary tree)
-    for entry in entries:
-        if entry["children"]:
-            entry["child_idx"] = entry["children"][0]
-
-    # Collect all data that goes into regular sectors (>= MINI_STREAM_CUTOFF or storage)
-    # and mini-stream data
-    mini_stream_data = bytearray()
-    for entry in entries:
-        if entry["type"] == 2:  # stream
-            if len(entry["data"]) < MINI_STREAM_CUTOFF:
-                entry["mini_start"] = len(mini_stream_data)
-                mini_stream_data.extend(entry["data"])
-                # Pad to mini sector boundary
-                pad = (MINI_SECTOR_SIZE - len(mini_stream_data) % MINI_SECTOR_SIZE) % MINI_SECTOR_SIZE
-                mini_stream_data.extend(b'\x00' * pad)
-                entry["start_sector"] = -1  # will be set to mini stream
-            else:
-                entry["mini_start"] = -1
-                entry["start_sector"] = -1  # will assign later
-        else:
-            entry["mini_start"] = -1
-            entry["start_sector"] = -1
-
-    # Build sectors: directory, mini-stream, mini-FAT, then regular stream data
-    sectors = []
-
-    def alloc_sector(data_chunk):
-        idx = len(sectors)
-        sectors.append(bytearray(data_chunk) + b'\x00' * (SECTOR_SIZE - len(data_chunk)))
-        return idx
-
-    # Build directory entries (128 bytes each, 4 per sector)
-    dir_entries_bin = bytearray()
-    for i, entry in enumerate(entries):
-        name_utf16 = entry["name"].encode("utf-16-le")
-        name_bytes = name_utf16[:62]  # max 31 chars + null = 64 bytes
-        name_padded = name_bytes + b'\x00' * (64 - len(name_bytes))
-        name_size = len(name_bytes) + 2  # include null terminator
-
-        # Links: for simplicity, use a flat structure
-        # Left sibling, right sibling
-        left_sib = 0xFFFFFFFF
-        right_sib = 0xFFFFFFFF
-
-        # For children of the same parent, chain them as right siblings
-        # First child has no left; rest chain right
-        parent = None
-        for pe in entries:
-            if i in pe["children"]:
-                parent = pe
-                break
-
-        if parent:
-            idx_in_parent = parent["children"].index(i)
-            if idx_in_parent > 0:
-                left_sib = parent["children"][idx_in_parent - 1]
-            if idx_in_parent < len(parent["children"]) - 1:
-                right_sib = parent["children"][idx_in_parent + 1]
-
-        child_id = entry["child_idx"] if entry["child_idx"] >= 0 else 0xFFFFFFFF
-
-        # Start sector
-        if entry["type"] == 5:  # root -> mini stream start
-            start_sect = 0xFFFFFFFE  # will fix later
-        elif entry["type"] == 2 and entry["mini_start"] >= 0:
-            start_sect = entry["mini_start"] // MINI_SECTOR_SIZE
-        else:
-            start_sect = 0xFFFFFFFE
-
-        data_size = len(entry["data"]) if entry["type"] == 2 else len(mini_stream_data) if entry["type"] == 5 else 0
-
-        # Color: always black (1) for simplicity
-        color = 1
-
-        # Build the 128-byte directory entry
-        de = bytearray(128)
-        de[0:64] = name_padded
-        struct.pack_into("<H", de, 64, name_size)
-        de[66] = entry["type"]
-        de[67] = color
-        struct.pack_into("<I", de, 68, left_sib)
-        struct.pack_into("<I", de, 72, right_sib)
-        struct.pack_into("<I", de, 76, child_id)
-        # CLSID (16 bytes at offset 80) - zero
-        struct.pack_into("<I", de, 116, start_sect)
-        struct.pack_into("<I", de, 120, data_size)
-
-        dir_entries_bin.extend(de)
-
-    # Allocate sectors for mini-stream data (stored as root entry's data)
-    mini_stream_sectors = []
-    for off in range(0, len(mini_stream_data), SECTOR_SIZE):
-        chunk = mini_stream_data[off:off + SECTOR_SIZE]
-        idx = alloc_sector(chunk)
-        mini_stream_sectors.append(idx)
-
-    # Fix root entry start sector
-    if mini_stream_sectors:
-        struct.pack_into("<I", dir_entries_bin, 116, mini_stream_sectors[0])
-
-    # Allocate sectors for regular (large) streams
-    for entry in entries:
-        if entry["type"] == 2 and entry["mini_start"] < 0:
-            data = entry["data"]
-            stream_sectors = []
-            for off in range(0, len(data), SECTOR_SIZE):
-                chunk = data[off:off + SECTOR_SIZE]
-                idx = alloc_sector(chunk)
-                stream_sectors.append(idx)
-            if stream_sectors:
-                entry["start_sector"] = stream_sectors[0]
-                entry["_sectors"] = stream_sectors
-
-    # Allocate directory sectors
-    dir_sectors = []
-    for off in range(0, len(dir_entries_bin), SECTOR_SIZE):
-        chunk = dir_entries_bin[off:off + SECTOR_SIZE]
-        idx = alloc_sector(chunk)
-        dir_sectors.append(idx)
-
-    # Build mini-FAT
-    mini_fat_entries = []
-    total_mini_sectors = len(mini_stream_data) // MINI_SECTOR_SIZE
-
-    for entry in entries:
-        if entry["type"] == 2 and entry["mini_start"] >= 0:
-            start_ms = entry["mini_start"] // MINI_SECTOR_SIZE
-            num_ms = (len(entry["data"]) + MINI_SECTOR_SIZE - 1) // MINI_SECTOR_SIZE
-            for j in range(num_ms):
-                ms_idx = start_ms + j
-                while len(mini_fat_entries) <= ms_idx:
-                    mini_fat_entries.append(0xFFFFFFFF)
-                if j < num_ms - 1:
-                    mini_fat_entries[ms_idx] = ms_idx + 1
-                else:
-                    mini_fat_entries[ms_idx] = 0xFFFFFFFE  # end of chain
-
-    # Pad mini FAT
-    while len(mini_fat_entries) < total_mini_sectors:
-        mini_fat_entries.append(0xFFFFFFFF)
-
-    mini_fat_bin = b''.join(struct.pack("<I", e) for e in mini_fat_entries)
-    mini_fat_sectors = []
-    for off in range(0, max(len(mini_fat_bin), 1), SECTOR_SIZE):
-        chunk = mini_fat_bin[off:off + SECTOR_SIZE] if off < len(mini_fat_bin) else b''
-        idx = alloc_sector(chunk)
-        mini_fat_sectors.append(idx)
-
-    # Build FAT
-    total_sectors = len(sectors)
-    # FAT sectors come after all data sectors
-    fat_entries_needed = total_sectors + 1  # +1 for FAT sector itself (at least)
-    # How many FAT sectors? Each FAT sector holds 128 entries
-    num_fat_sectors = (fat_entries_needed + 127) // 128
-
-    fat = [0xFFFFFFFF] * ((num_fat_sectors) * 128)
-    fat_sector_ids = []
-
-    for _ in range(num_fat_sectors):
-        idx = len(sectors)
-        sectors.append(bytearray(SECTOR_SIZE))
-        fat_sector_ids.append(idx)
-
-    # Now fill in the FAT chain entries
-    # Mini stream sectors chain
-    for i, ms in enumerate(mini_stream_sectors):
-        if i < len(mini_stream_sectors) - 1:
-            fat[ms] = mini_stream_sectors[i + 1]
-        else:
-            fat[ms] = 0xFFFFFFFE
-
-    # Regular stream sectors chain
-    for entry in entries:
-        if hasattr(entry, '_sectors') or (entry["type"] == 2 and entry.get("_sectors")):
-            pass
-    for entry in entries:
-        ss = entry.get("_sectors", [])
-        for i, s in enumerate(ss):
-            if i < len(ss) - 1:
-                fat[s] = ss[i + 1]
-            else:
-                fat[s] = 0xFFFFFFFE
-
-    # Directory sectors chain
-    for i, ds in enumerate(dir_sectors):
-        if i < len(dir_sectors) - 1:
-            fat[ds] = dir_sectors[i + 1]
-        else:
-            fat[ds] = 0xFFFFFFFE
-
-    # Mini FAT sectors chain
-    for i, mfs in enumerate(mini_fat_sectors):
-        if i < len(mini_fat_sectors) - 1:
-            fat[mfs] = mini_fat_sectors[i + 1]
-        else:
-            fat[mfs] = 0xFFFFFFFE
-
-    # FAT sectors are marked as FAT sectors (0xFFFFFFFD)
-    for fs in fat_sector_ids:
-        fat[fs] = 0xFFFFFFFD
-
-    # Write FAT data into FAT sectors
-    fat_bin = b''.join(struct.pack("<I", e) for e in fat[:num_fat_sectors * 128])
-    for i, fs in enumerate(fat_sector_ids):
-        sectors[fs] = bytearray(fat_bin[i * SECTOR_SIZE:(i + 1) * SECTOR_SIZE])
-        if len(sectors[fs]) < SECTOR_SIZE:
-            sectors[fs].extend(b'\xff' * (SECTOR_SIZE - len(sectors[fs])))
-
-    # Update directory entries with correct start sectors
-    # Re-serialize directory entries with updated start sectors
-    dir_entries_bin2 = bytearray()
-    for i, entry in enumerate(entries):
-        # Copy the old entry
-        de = bytearray(dir_entries_bin[i * 128:(i + 1) * 128])
-
-        if entry["type"] == 5:  # root
-            if mini_stream_sectors:
-                struct.pack_into("<I", de, 116, mini_stream_sectors[0])
-            else:
-                struct.pack_into("<I", de, 116, 0xFFFFFFFE)
-            struct.pack_into("<I", de, 120, len(mini_stream_data))
-        elif entry["type"] == 2:
-            ss = entry.get("_sectors", [])
-            if ss:
-                struct.pack_into("<I", de, 116, ss[0])
-            elif entry["mini_start"] >= 0:
-                struct.pack_into("<I", de, 116, entry["mini_start"] // MINI_SECTOR_SIZE)
-            struct.pack_into("<I", de, 120, len(entry["data"]))
-
-        dir_entries_bin2.extend(de)
-
-    # Re-write directory sectors
-    for i, ds in enumerate(dir_sectors):
-        off = i * SECTOR_SIZE
-        chunk = dir_entries_bin2[off:off + SECTOR_SIZE]
-        sectors[ds] = bytearray(chunk) + b'\x00' * (SECTOR_SIZE - len(chunk))
-
-    # Build header (512 bytes)
-    header = bytearray(SECTOR_SIZE)
-    # Magic
-    header[0:8] = b'\xD0\xCF\x11\xE0\xA1\xB1\x1A\xE1'
-    # Minor version
-    struct.pack_into("<H", header, 24, 0x003E)
-    # Major version (3 = v3)
-    struct.pack_into("<H", header, 26, 0x0003)
-    # Byte order (little-endian)
-    struct.pack_into("<H", header, 28, 0xFFFE)
-    # Sector size power (9 = 512)
-    struct.pack_into("<H", header, 30, 9)
-    # Mini sector size power (6 = 64)
-    struct.pack_into("<H", header, 32, 6)
-    # Total sectors in directory (0 for v3)
-    struct.pack_into("<I", header, 40, 0)
-    # Total FAT sectors
-    struct.pack_into("<I", header, 44, num_fat_sectors)
-    # First directory sector SECID
-    struct.pack_into("<I", header, 48, dir_sectors[0])
-    # Mini stream cutoff
-    struct.pack_into("<I", header, 56, MINI_STREAM_CUTOFF)
-    # First mini FAT sector
-    struct.pack_into("<I", header, 60, mini_fat_sectors[0] if mini_fat_sectors else 0xFFFFFFFE)
-    # Total mini FAT sectors
-    struct.pack_into("<I", header, 64, len(mini_fat_sectors))
-    # First DIFAT sector (none needed for small files)
-    struct.pack_into("<I", header, 68, 0xFFFFFFFE)
-    # Total DIFAT sectors
-    struct.pack_into("<I", header, 72, 0)
-    # DIFAT array (109 entries starting at offset 76)
-    for i in range(109):
-        if i < len(fat_sector_ids):
-            struct.pack_into("<I", header, 76 + i * 4, fat_sector_ids[i])
-        else:
-            struct.pack_into("<I", header, 76 + i * 4, 0xFFFFFFFF)
-
-    # Assemble
-    result = bytearray(header)
-    for sector in sectors:
-        result.extend(sector)
-
-    return bytes(result)
-
-
-def build_dir_stream(modules):
-    """Build the VBA 'dir' stream (compressed).
-    modules: list of (name, is_document, code_str)
-    """
-    buf = bytearray()
-
-    def add_record(rec_id, data):
-        buf.extend(struct.pack("<HI", rec_id, len(data)))
-        buf.extend(data)
-
-    # PROJECTSYSKIND
-    add_record(0x0001, struct.pack("<I", 1))  # Win32
-    # PROJECTLCID
-    add_record(0x0002, struct.pack("<I", 0x0409))
-    # PROJECTLCIDINVOKE
-    add_record(0x0014, struct.pack("<I", 0x0409))
-    # PROJECTCODEPAGE
-    add_record(0x0003, struct.pack("<H", 1252))
-    # PROJECTNAME
-    add_record(0x0004, b"VBAProject")
-    # PROJECTDOCSTRING
-    add_record(0x0005, b"")
-    add_record(0x0040, b"")  # Unicode version
-    # PROJECTHELPFILEPATH
-    add_record(0x0006, b"")
-    add_record(0x003D, b"")
-    # PROJECTHELPCONTEXT
-    add_record(0x0007, struct.pack("<I", 0))
-    # PROJECTLIBFLAGS
-    add_record(0x0008, struct.pack("<I", 0))
-    # PROJECTVERSION
-    buf.extend(struct.pack("<HI", 0x0009, 4))
-    buf.extend(struct.pack("<IH", 1, 1))  # major.minor
-    # PROJECTCONSTANTS
-    add_record(0x000C, b"")
-    add_record(0x003C, b"")
-
-    # Reference to stdole
-    add_record(0x000D, b"*\\G{00020430-0000-0000-C000-000000000046}#2.0#0#C:\\Windows\\SysWOW64\\stdole2.tlb#OLE Automation")
-    add_record(0x000E, b"stdole")
-
-    # Reference to Office
-    add_record(0x000D, b"*\\G{2DF8D04C-5BFA-101B-BDE5-00AA0044DE52}#2.0#0#C:\\Program Files\\Common Files\\Microsoft Shared\\OFFICE16\\MSO.DLL#Microsoft Office 16.0 Object Library")
-    add_record(0x000E, b"Office")
-
-    # PROJECTMODULES
-    buf.extend(struct.pack("<HI", 0x000F, 2))
-    buf.extend(struct.pack("<H", len(modules)))
-    # PROJECTCOOKIE
-    add_record(0x0013, struct.pack("<H", 0xFFFF))
-
-    for mod_name, is_document, code_str in modules:
-        name_bytes = mod_name.encode("ascii")
-        # MODULENAME
-        add_record(0x0019, name_bytes)
-        # MODULENAMEUNICODE
-        add_record(0x0047, mod_name.encode("utf-16-le"))
-        # MODULESTREAMNAME
-        add_record(0x001A, name_bytes)
-        add_record(0x0032, mod_name.encode("utf-16-le"))
-        # MODULEDOCSTRING
-        add_record(0x001C, b"")
-        add_record(0x0048, b"")
-        # MODULEOFFSET
-        add_record(0x0031, struct.pack("<I", 0))
-        # MODULEHELPCONTEXT
-        add_record(0x001E, struct.pack("<I", 0))
-        # MODULECOOKIE
-        add_record(0x002C, struct.pack("<H", 0xFFFF))
-        # MODULETYPE
-        if is_document:
-            add_record(0x0022, b"")  # Document module
-        else:
-            add_record(0x0021, b"")  # Procedural module
-        # MODULEREADONLY (not set)
-        # MODULEPRIVATE (not set)
-        # MODULEEND
-        buf.extend(struct.pack("<HI", 0x002B, 0))
-
-    # PROJECTEND
-    buf.extend(struct.pack("<HI", 0x0010, 0))
-
-    return compress_vba(buf)
-
-
-def build_module_stream(source_code):
-    """Build a VBA module stream: performance cache (dummy) + compressed source."""
-    # The module stream has two parts:
-    # 1. Performance cache (we write a minimal one)
-    # 2. Compressed source code starting at the offset recorded in dir stream
-    # For simplicity, we put offset=0 and just have the compressed source
-    return compress_vba(source_code.encode("latin-1", errors="replace"))
-
-
-def build_vba_project_bin(modules):
-    """Build a complete vbaProject.bin OLE file with the given VBA modules.
-    modules: list of (name, is_document, source_code_str)
-    """
-    streams = []
-
-    # _VBA_PROJECT stream (minimal, required)
-    vba_project_stream = struct.pack("<HH", 0x61CC, 0x0000) + b'\x00' * 3
-    streams.append(("VBA/_VBA_PROJECT", vba_project_stream))
-
-    # dir stream
-    dir_data = build_dir_stream(modules)
-    streams.append(("VBA/dir", dir_data))
-
-    # Module streams
-    for name, is_doc, source in modules:
-        mod_data = build_module_stream(source)
-        streams.append((f"VBA/{name}", mod_data))
-
-    # PROJECT stream (text)
-    project_lines = [
-        'ID="{00000000-0000-0000-0000-000000000001}"',
-        "Module=GreenStarMacros",
-        "Document=ThisWorkbook/&H00000000",
-        "Name=\"VBAProject\"",
-        "HelpContextID=\"0\"",
-        "VersionCompatible32=\"393222000\"",
-        "CMG=\"0000\"",
-        "DPB=\"0000\"",
-        "GC=\"0000\"",
-        "",
-        "[Host Extender Info]",
-        "&H00000001={3832D640-CF90-11CF-8E43-00A0C911005A};VBE;&H00000000",
-        "",
-        "[Workspace]",
-        "ThisWorkbook=0, 0, 0, 0, C",
-        "GreenStarMacros=0, 0, 0, 0, C",
-    ]
-    streams.append(("PROJECT", "\r\n".join(project_lines).encode("latin-1")))
-
-    # PROJECTwm stream (module name Unicode map)
-    wm_data = bytearray()
-    for name, _, _ in modules:
-        wm_data.extend(name.encode("ascii") + b'\x00')
-        wm_data.extend(name.encode("utf-16-le") + b'\x00\x00')
-    wm_data.extend(b'\x00')
-    streams.append(("PROJECTwm", bytes(wm_data)))
-
-    return build_cfb(streams)
+print("Preparing VBA code...")
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# STEP 5: Build VBA source code
+# STEP 4 (continued): Build VBA source code
 # ═══════════════════════════════════════════════════════════════════════════════
 
 # Build a lookup table for conditional rules as VBA readable format
@@ -1579,14 +1013,14 @@ instructions = [
     "HOW TO USE:",
     "• Click any credit name above to navigate to its questions",
     "• Fill in the Response column (G) for each question",
-    "• Y/N questions use dropdown validation - dependent questions show/hide automatically",
-    "• Use the action buttons above: Review highlights gaps, Search finds questions across credits",
+    "• Y/N questions use dropdown validation",
+    "• Progress updates automatically via formulas (Answered / Total / %)",
     "• The Guidance column (H) shows submission guidelines, tips, and evidence requirements",
-    "• To mark a credit as N/A: go to the credit sheet and run the N/A toggle (macros menu)",
-    "• Progress updates automatically when you change responses",
+    "• Sheets are protected — only the Response column is editable (password: greenstar)",
     "",
-    "KEYBOARD SHORTCUTS (via macros):",
-    "• Ctrl+Shift+D = Dashboard  |  Ctrl+Shift+S = Search  |  Ctrl+Shift+R = Review",
+    "OPTIONAL VBA MACROS (for advanced features):",
+    "• Save as .xlsm, then import GreenStarMacros.bas via Developer > Visual Basic > File > Import",
+    "• Adds: conditional row visibility, search, review mode, dark mode, version history",
 ]
 for i, line in enumerate(instructions):
     cell = dsh.cell(row=inst_row + i, column=1, value=line)
@@ -1748,90 +1182,88 @@ dsh.protection.sheet = True
 dsh.protection.password = "greenstar"
 dsh.protection.enable()
 
+# ── Dashboard formulas: wire up progress via COUNTA ──
+# Now that all credit sheets exist, add formulas referencing response columns
+for ci, c in enumerate(all_credits):
+    row = ci + 5
+    sname = c["sheet_name"][:31]
+    safe_name = "'" + sname.replace("'", "''") + "'"
+
+    # Find the question rows for this credit (rows where col E has a value)
+    ws = wb[sname]
+    q_rows = []
+    for r in range(2, ws.max_row + 1):
+        if ws.cell(row=r, column=5).value in ["Descriptive", "Data", "Condition (Y/N)"]:
+            q_rows.append(r)
+
+    if q_rows:
+        # Build a COUNTA formula that counts non-blank cells in column G for question rows
+        # Use a range approach: count non-blank in G column for question rows
+        first_q = q_rows[0]
+        last_q = q_rows[-1]
+        # Answered = count non-blank responses in the question row range of column G
+        # We use SUMPRODUCT to only count rows that are question rows (have col E non-blank)
+        answered_formula = f'=SUMPRODUCT(({safe_name}!E{first_q}:E{last_q}<>"")*({safe_name}!G{first_q}:G{last_q}<>""))'
+        total_formula = f'=COUNTA({safe_name}!E{first_q}:E{last_q})'
+
+        dsh.cell(row=row, column=4, value=answered_formula)
+        dsh.cell(row=row, column=5, value=total_formula)
+        dsh.cell(row=row, column=6, value=f'=IF(E{row}>0,D{row}/E{row},0)')
+        dsh.cell(row=row, column=6).number_format = '0%'
+
+# Totals row formulas
+dsh.cell(row=2, column=4, value=f'=SUM(D5:D{total_credits + 4})')
+dsh.cell(row=2, column=5, value=f'=SUM(E5:E{total_credits + 4})')
+dsh.cell(row=2, column=6, value='=IF(E2>0,D2/E2,0)')
+dsh.cell(row=2, column=6).number_format = '0%'
+
+print(f"  Dashboard formulas added")
 print(f"  {total_credits} credit sheets created")
 print(f"  {total_questions} questions with guidance")
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# STEP 7: Save as .xlsx first, then inject VBA to make .xlsm
+# STEP 7: Save workbook and export VBA as importable .bas file
 # ═══════════════════════════════════════════════════════════════════════════════
-print("Saving workbook...")
 
-# Save as xlsx first
+print("Saving workbook...")
 xlsx_path = "Green_Star_Buildings_v1.1_Interactive.xlsx"
 wb.save(xlsx_path)
-print(f"  Saved {xlsx_path}")
+print(f"  Saved {xlsx_path} ({os.path.getsize(xlsx_path):,} bytes)")
 
-# Now inject VBA to create .xlsm
-print("Injecting VBA macros...")
+# Export VBA code as a .bas file that can be imported into Excel
+# (Developer tab > Visual Basic > File > Import File)
+print("Exporting VBA module...")
+bas_path = "GreenStarMacros.bas"
+with open(bas_path, "w") as f:
+    # Strip the Attribute lines from ThisWorkbook (not needed for .bas import)
+    f.write(MACROS_CODE)
 
-vba_modules = [
-    ("ThisWorkbook", True, THISWORKBOOK_CODE),
-    ("GreenStarMacros", False, MACROS_CODE),
-]
+print(f"  Saved {bas_path}")
 
-try:
-    vba_bin = build_vba_project_bin(vba_modules)
-    print(f"  vbaProject.bin: {len(vba_bin)} bytes")
+# Also write the ThisWorkbook code separately
+twb_path = "ThisWorkbook.cls"
+with open(twb_path, "w") as f:
+    f.write(THISWORKBOOK_CODE)
 
-    xlsm_path = "Green_Star_Buildings_v1.1_Interactive.xlsm"
-
-    # Read the xlsx as a zip, modify content types and add vba, write as xlsm
-    with zipfile.ZipFile(xlsx_path, 'r') as zin:
-        with zipfile.ZipFile(xlsm_path, 'w', zipfile.ZIP_DEFLATED) as zout:
-            for item in zin.infolist():
-                data = zin.read(item.filename)
-
-                if item.filename == '[Content_Types].xml':
-                    # Add VBA content type
-                    ct_xml = data.decode('utf-8')
-                    # Add macro content type
-                    if 'vbaProject.bin' not in ct_xml:
-                        ct_xml = ct_xml.replace(
-                            '</Types>',
-                            '<Override PartName="/xl/vbaProject.bin" '
-                            'ContentType="application/vnd.ms-office.vbaProject"/>\n</Types>'
-                        )
-                    # Change workbook content type from xlsx to xlsm
-                    ct_xml = ct_xml.replace(
-                        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml',
-                        'application/vnd.ms-excel.sheet.macroEnabled.main+xml'
-                    )
-                    zout.writestr(item, ct_xml)
-
-                elif item.filename == 'xl/_rels/workbook.xml.rels':
-                    # Add relationship to vbaProject.bin
-                    rels_xml = data.decode('utf-8')
-                    if 'vbaProject.bin' not in rels_xml:
-                        rels_xml = rels_xml.replace(
-                            '</Relationships>',
-                            '<Relationship Id="rIdVBA" Type='
-                            '"http://schemas.microsoft.com/office/2006/relationships/vbaProject" '
-                            'Target="vbaProject.bin"/>\n</Relationships>'
-                        )
-                    zout.writestr(item, rels_xml)
-                else:
-                    zout.writestr(item, data)
-
-            # Add vbaProject.bin
-            zout.writestr('xl/vbaProject.bin', vba_bin)
-
-    print(f"  Saved {xlsm_path}")
-
-except Exception as e:
-    print(f"  WARNING: VBA injection failed: {e}")
-    print(f"  The .xlsx file is still fully functional (without macros)")
-    xlsm_path = None
+print(f"  Saved {twb_path}")
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # DONE
 # ═══════════════════════════════════════════════════════════════════════════════
-import os
 print(f"\nDone!")
 print(f"  Credits: {total_credits}")
 print(f"  Questions: {total_questions}")
 print(f"  Conditional rules: {len(conditional_rules)}")
-if xlsm_path and os.path.exists(xlsm_path):
-    print(f"  Output: {xlsm_path} ({os.path.getsize(xlsm_path):,} bytes)")
-print(f"  Backup: {xlsx_path} ({os.path.getsize(xlsx_path):,} bytes)")
-print(f"\nTo use: Open the .xlsm file and enable macros.")
-print(f"Protection password: greenstar")
+print(f"  Output: {xlsx_path} ({os.path.getsize(xlsx_path):,} bytes)")
+print(f"  VBA module: {bas_path}")
+print(f"  Protection password: greenstar")
+print()
+print("The .xlsx works immediately — Dashboard progress updates via formulas.")
+print()
+print("For advanced features (conditional visibility, search, review mode,")
+print("dark mode, version history), import the VBA macros:")
+print("  1. Open the .xlsx, save as .xlsm (macro-enabled)")
+print("  2. Developer tab > Visual Basic > File > Import File")
+print("  3. Import GreenStarMacros.bas")
+print("  4. Double-click ThisWorkbook in the VBA editor, paste ThisWorkbook.cls")
+print("  5. Save and enable macros")
